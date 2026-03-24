@@ -158,5 +158,5 @@ load_portfolio() / save_portfolio()
 
 - [ ] 定期自動更新 `jyf_backtest_60d_results.csv`（目前需手動跑 `jyf_backtest.py`，macOS Only）
 - [ ] 加入 Email / Line Notify 到期通知
-- [ ] 支援賣出記錄（標記已賣出、記錄賣出價）
-- [ ] 多帳戶損益彙總圖表
+- [x] 支援賣出記錄（標記已賣出、記錄賣出價）
+- [x] 多帳戶損益彙總圖表

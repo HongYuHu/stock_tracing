@@ -150,7 +150,7 @@ def lookup_company_name(code: str) -> str:
 def color_return(val):
     try:
         v = float(val)
-        return 'color: #16a34a; font-weight:bold' if v > 0 else ('color: #dc2626; font-weight:bold' if v < 0 else '')
+        return 'color: #1a56db; font-weight:bold' if v > 0 else ('color: #dc2626; font-weight:bold' if v < 0 else '')
     except Exception:
         return ''
 
@@ -171,7 +171,7 @@ def color_days(val):
 st.set_page_config(page_title="股票追蹤系統", page_icon="📈", layout="wide")
 st.title("📈 股票追蹤系統")
 
-tab1, tab2 = st.tabs(["📁 我的持股", "🔍 金玉峰追蹤"])
+tab1, tab2, tab3 = st.tabs(["📁 我的持股", "🔍 金玉峰追蹤", "📊 績效圖表"])
 
 # ═══════════════════════════════════════════════════════════════════════
 # Part 1：個人持股管理
@@ -301,7 +301,8 @@ with tab1:
                 total_cost  += cost
                 total_value += (value or cost)
 
-            alert = s.get('reminder', False) and days_left <= 0
+            if s.get('status') == 'sold':
+                continue
 
             rows.append({
                 '_idx':      i,
@@ -364,17 +365,64 @@ with tab1:
         )
         st.dataframe(styled, use_container_width=True, height=min(400, 80 + len(rows) * 35))
 
-        # ── 刪除持股 ──────────────────────────────────────────────────
+        # ── 賣出持股 ──────────────────────────────────────────────────
         st.divider()
-        with st.expander("🗑️ 刪除持股"):
-            options = [f"[{i}] {s['code']} {s['name']} 買入:{s['buy_date']}" for i, s in enumerate(portfolio)]
-            to_delete = st.selectbox("選擇要刪除的持股", options)
-            if st.button("確認刪除", type="secondary"):
-                idx = int(to_delete.split(']')[0][1:])
-                removed = portfolio.pop(idx)
-                save_portfolio(portfolio)
-                st.success(f"已刪除 {removed['code']} {removed['name']}")
-                st.rerun()
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            with st.expander("💸 賣出持股"):
+                active_options = [f"[{i}] {s['code']} {s['name']}" for i, s in enumerate(portfolio) if s.get('status', 'active') == 'active']
+                if active_options:
+                    to_sell = st.selectbox("選擇要賣出的持股", active_options)
+                    sell_date = st.date_input("賣出日期", value=date.today())
+                    sell_price = st.number_input("賣出價格", min_value=0.0, step=0.1)
+                    if st.button("確認賣出", type="primary"):
+                        idx = int(to_sell.split(']')[0][1:])
+                        portfolio[idx]['status'] = 'sold'
+                        portfolio[idx]['sold_date'] = str(sell_date)
+                        portfolio[idx]['sold_price'] = sell_price
+                        save_portfolio(portfolio)
+                        st.success(f"已記錄賣出 {portfolio[idx]['code']} {portfolio[idx]['name']}")
+                        st.rerun()
+                else:
+                    st.info("尚無活動中持股")
+
+        with col_s2:
+            with st.expander("🗑️ 永久刪除"):
+                all_options = [f"[{i}] {s['code']} {s['name']} ({s.get('status','active')})" for i, s in enumerate(portfolio)]
+                if all_options:
+                    to_delete = st.selectbox("選擇要刪除的持股", all_options)
+                    if st.button("確認永久刪除", type="secondary"):
+                        idx = int(to_delete.split(']')[0][1:])
+                        removed = portfolio.pop(idx)
+                        save_portfolio(portfolio)
+                        st.success(f"已刪除 {removed['code']} {removed['name']}")
+                        st.rerun()
+
+        # ── 已實現損益歷史 ──────────────────────────────────────────
+        sold_list = [s for s in portfolio if s.get('status') == 'sold']
+        if sold_list:
+            st.divider()
+            st.subheader("📋 已實現損益歷史")
+            history_rows = []
+            total_realized = 0.0
+            for s in sold_list:
+                buy_p = s['buy_price']
+                sell_p = s.get('sold_price', 0)
+                qty = s.get('qty', 0)
+                ret = round((sell_p - buy_p) / buy_p * 100, 2) if buy_p > 0 else 0
+                realized = round((sell_p - buy_p) * qty, 0)
+                total_realized += realized
+                history_rows.append({
+                    '代號': s['code'], '公司': s['name'], '買入日': s['buy_date'], '賣出日': s.get('sold_date',''),
+                    '買入價': buy_p, '賣出價': sell_p, '報酬率(%)': ret, '損益(元)': realized
+                })
+            
+            st.metric("累計已實現損益", f"${total_realized:,.0f} 元", 
+                      delta=f"{'+' if total_realized >= 0 else ''}{total_realized:,.0f}", delta_color="normal")
+            
+            hist_df = pd.DataFrame(history_rows)
+            styled_hist = hist_df.style.map(color_return, subset=['報酬率(%)', '損益(元)'])
+            st.dataframe(styled_hist, use_container_width=True)
 
         # ── 交易時段自動刷新（每 5 分鐘）────────────────────────────
         if is_market_open:
@@ -472,3 +520,36 @@ with tab2:
             display_s = settled[[c for c in cols_settled if c in settled.columns]].sort_values('報告日期', ascending=False)
             styled_s = display_s.style.map(color_return, subset=['報酬率(%)'])
             st.dataframe(styled_s, use_container_width=True)
+
+# ═══════════════════════════════════════════════════════════════════════
+# Part 3：績效圖表
+# ═══════════════════════════════════════════════════════════════════════
+with tab3:
+    st.header("📊 策略表現圖表分析")
+    
+    if os.path.exists(JYF_CSV):
+        df_chart = pd.read_csv(JYF_CSV, encoding='utf-8')
+        settled_bt = df_chart[df_chart['狀態'] == '已結算'].copy()
+        settled_bt['報酬率(%)'] = pd.to_numeric(settled_bt['報酬率(%)'], errors='coerce')
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader("報酬率分布圖")
+            if not settled_bt.empty:
+                # 簡單分箱
+                bins = [-100, -20, -10, 0, 10, 20, 30, 50, 100, 500]
+                labels = ["<-20%", "-20~-10%", "-10~0%", "0~10%", "10~20%", "20~30%", "30~50%", "50~100%", ">100%"]
+                settled_bt['range'] = pd.cut(settled_bt['報酬率(%)'], bins=bins, labels=labels)
+                dist = settled_bt['range'].value_counts().reindex(labels)
+                st.bar_chart(dist)
+        
+        with c2:
+            st.subheader("時間軸報酬率 (散佈圖)")
+            if not settled_bt.empty:
+                chart_data = settled_bt[['報告日期', '報酬率(%)']].sort_values('報告日期')
+                st.line_chart(chart_data.set_index('報告日期'))
+                
+        st.divider()
+        st.info("💡 圖表說明：左側分布圖可看出勝率結構，右側折線圖反映不同月份報告的單一表現。")
+    else:
+        st.warning("尚無回測資料可供視覺化")
