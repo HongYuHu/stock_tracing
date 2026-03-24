@@ -1,0 +1,14 @@
+# Streamlit secrets（含 GitHub Token，絕對不能 commit）
+.streamlit/secrets.toml
+
+# Claude Code 內部資料
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# macOS
+.DS_Store
