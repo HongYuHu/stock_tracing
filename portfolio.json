@@ -1,19 +1,64 @@
 [
   {
-    "code": "2330",
-    "name": "台積電",
+    "code": "00935",
+    "name": "野村台灣新科技50",
     "buy_date": "2026-03-24",
-    "buy_price": 1800.0,
-    "qty": 0,
-    "broker": "其他證券戶1",
+    "buy_price": 38.53,
+    "qty": 4000,
+    "broker": "元富證券",
     "reminder": true
   },
   {
-    "code": "2430",
-    "name": "",
+    "code": "00757",
+    "name": "統一fang+",
     "buy_date": "2026-03-24",
-    "buy_price": 96.0,
-    "qty": 0,
+    "buy_price": 103.42,
+    "qty": 7000,
+    "broker": "元富證券",
+    "reminder": true
+  },
+  {
+    "code": "2382",
+    "name": "QUANTA COMPUTER",
+    "buy_date": "2026-03-24",
+    "buy_price": 260.0,
+    "qty": 1000,
+    "broker": "元富證券",
+    "reminder": true
+  },
+  {
+    "code": "6239",
+    "name": "力成",
+    "buy_date": "2026-03-24",
+    "buy_price": 194.64,
+    "qty": 100,
+    "broker": "元富證券",
+    "reminder": true
+  },
+  {
+    "code": "2441",
+    "name": "超豐",
+    "buy_date": "2026-03-24",
+    "buy_price": 92.95,
+    "qty": 200,
+    "broker": "元富證券",
+    "reminder": true
+  },
+  {
+    "code": "3036",
+    "name": "文曄",
+    "buy_date": "2026-03-24",
+    "buy_price": 250.97,
+    "qty": 180,
+    "broker": "元富證券",
+    "reminder": true
+  },
+  {
+    "code": "2493",
+    "name": "揚博",
+    "buy_date": "2026-03-24",
+    "buy_price": 117.09,
+    "qty": 500,
     "broker": "元富證券",
     "reminder": true
   }

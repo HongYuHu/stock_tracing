@@ -26,11 +26,15 @@ PORTFOLIO_FILE = os.path.join(BASE_DIR, 'portfolio.json')
 JYF_CSV = os.path.join(BASE_DIR, 'jyf_backtest_60d_results.csv')
 
 # ── GitHub 設定（從 Streamlit secrets 讀取，本地端不填則走本地檔案）──
-GH_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
-GH_REPO  = st.secrets.get("GITHUB_REPO",  "")   # 格式：owner/repo-name
+try:
+    GH_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
+    GH_REPO  = st.secrets.get("GITHUB_REPO",  "")   # 格式：owner/repo-name
+except Exception:
+    GH_TOKEN = ""
+    GH_REPO  = ""
 GH_PATH  = "portfolio.json"
-GH_API   = f"https://api.github.com/repos/{GH_REPO}/contents/{GH_PATH}"
-GH_HDR   = {"Authorization": f"token {GH_TOKEN}", "Accept": "application/vnd.github+json"}
+GH_API   = f"https://api.github.com/repos/{GH_REPO}/contents/{GH_PATH}" if GH_REPO else ""
+GH_HDR   = {"Authorization": f"token {GH_TOKEN}", "Accept": "application/vnd.github+json"} if GH_TOKEN else {}
 
 # ── 持股 JSON 讀寫（雲端走 GitHub API，本地走本地檔案）──────────────
 def load_portfolio() -> list:
@@ -171,7 +175,7 @@ def color_days(val):
 st.set_page_config(page_title="股票追蹤系統", page_icon="📈", layout="wide")
 st.title("📈 股票追蹤系統")
 
-tab1, tab2, tab3 = st.tabs(["📁 我的持股", "🔍 金玉峰追蹤", "📊 績效圖表"])
+tab1, tab2, tab3, tab4 = st.tabs(["📁 我的持股", "🔍 金玉峰追蹤", "📊 績效圖表", "🤖 AI 分析"])
 
 # ═══════════════════════════════════════════════════════════════════════
 # Part 1：個人持股管理
@@ -184,6 +188,8 @@ with tab1:
         st.session_state['form_code'] = ''
     if 'form_name' not in st.session_state:
         st.session_state['form_name'] = ''
+    if 'form_price' not in st.session_state:
+        st.session_state['form_price'] = 0.0
     if 'name_lookup_status' not in st.session_state:
         st.session_state['name_lookup_status'] = ''
 
@@ -191,11 +197,22 @@ with tab1:
         code = st.session_state.get('form_code', '').strip()
         if len(code) >= 4:
             name = lookup_company_name(code)
+            # 同時抓取現價
+            prices_dict = fetch_prices_batch((code,))
+            latest_price = prices_dict.get(code)
+            
             if name:
                 st.session_state['form_name'] = name
-                st.session_state['name_lookup_status'] = f'✅ 已自動填入：{name}'
+                msg = f'✅ 已自動填入：{name}'
+                if latest_price:
+                    msg += f' (最新收盤/現價: {latest_price})'
+                    st.session_state['form_price'] = float(latest_price)
+                st.session_state['name_lookup_status'] = msg
             else:
                 st.session_state['name_lookup_status'] = '⚠️ 查無資料，請手動輸入'
+                if latest_price:
+                    st.session_state['form_price'] = float(latest_price)
+                    st.session_state['name_lookup_status'] += f' (但抓到現價: {latest_price})'
         else:
             st.session_state['name_lookup_status'] = ''
 
@@ -216,7 +233,7 @@ with tab1:
             )
         with c2:
             new_date  = st.date_input("買入日期 *", value=date.today())
-            new_price = st.number_input("買入價格 *", min_value=0.0, step=0.5, format="%.2f")
+            new_price = st.number_input("買入價格 / 盤後最新價 *", min_value=0.0, step=0.5, format="%.2f", key='form_price')
         with c3:
             new_broker   = st.selectbox("證券戶", ["元富證券", "其他證券戶1", "其他證券戶2"])
             new_reminder = st.checkbox("開啟 60天賣出提醒", value=True)
@@ -227,21 +244,44 @@ with tab1:
             new_name = st.session_state.get('form_name', '').strip()
             if new_code and new_price > 0:
                 portfolio = load_portfolio()
-                portfolio.append({
-                    'code':      new_code,
-                    'name':      new_name,
-                    'buy_date':  str(new_date),
-                    'buy_price': new_price,
-                    'qty':       new_qty,
-                    'broker':    new_broker,
-                    'reminder':  new_reminder,
-                })
+                
+                # 尋找是否已有同代號且未賣出的持股
+                existing = [s for s in portfolio if s.get('code') == new_code and s.get('status', 'active') == 'active']
+                
+                if existing:
+                    target = existing[0]  # 取第一筆進行合併
+                    old_qty = target.get('qty', 1000)
+                    old_price = target.get('buy_price', 0)
+                    
+                    new_total_qty = old_qty + new_qty
+                    new_avg_price = (old_qty * old_price + new_qty * new_price) / new_total_qty
+                    
+                    target['qty'] = new_total_qty
+                    target['buy_price'] = round(new_avg_price, 2)
+                    target['buy_date'] = str(new_date) # 更新為最後加碼日期
+                    # 覆蓋券商與筆記（如果這次有填）
+                    if new_broker: target['broker'] = new_broker
+                    if new_reminder: target['reminder'] = new_reminder
+                    
+                    st.success(f"✅ 已成功加碼合併 {new_code} {new_name}！新均價：{new_avg_price:.2f}，總股數：{new_total_qty}")
+                else:
+                    portfolio.append({
+                        'code':      new_code,
+                        'name':      new_name,
+                        'buy_date':  str(new_date),
+                        'buy_price': new_price,
+                        'qty':       new_qty,
+                        'broker':    new_broker,
+                        'reminder':  new_reminder,
+                        'status':    'active'
+                    })
+                    st.success(f"✅ 已新增 {new_code} {new_name}")
+
                 save_portfolio(portfolio)
-                # 清空表單
-                st.session_state['form_code'] = ''
-                st.session_state['form_name'] = ''
-                st.session_state['name_lookup_status'] = ''
-                st.success(f"✅ 已新增 {new_code} {new_name}")
+                # 清空表單：透過刪除 session_state 的 key 讓它重置，避免 exception
+                for key in ['form_code', 'form_name', 'form_price', 'name_lookup_status']:
+                    if key in st.session_state:
+                        del st.session_state[key]
                 st.rerun()
             else:
                 st.warning("請填寫股票代號與買入價格")
@@ -303,6 +343,8 @@ with tab1:
 
             if s.get('status') == 'sold':
                 continue
+
+            alert = s.get('reminder', False) and days_left <= 0
 
             rows.append({
                 '_idx':      i,
@@ -484,19 +526,42 @@ with tab2:
 
         # 快到期警示
         near = active[active['距賣出天數'].notna() & (active['距賣出天數'] <= 7)]
+        
+        # 這裡需要抓取最新的報價來顯示，與第一頁即時跳動同步
+        jyf_codes = tuple(active['代號'].astype(str).unique())
+        jyf_prices = fetch_prices_batch(jyf_codes)
+
         if not near.empty:
             for _, row in near.iterrows():
                 rd = int(row['距賣出天數'])
-                ret = row.get('報酬率(%)', '—')
-                if rd <= 0:
-                    st.error(f"🔴 **{row.get('代號','')} {row.get('公司','')}** 已達60天，建議賣出！現報酬率：{ret}%")
+                code = str(row.get('代號',''))
+                buy = row.get('買進價格', 0)
+                # 即時算報酬率
+                live_price = jyf_prices.get(code, row.get('賣出價格'))
+                if pd.notna(buy) and buy > 0 and live_price:
+                    ret = round((float(live_price) - float(buy)) / float(buy) * 100, 2)
                 else:
-                    st.warning(f"🟡 **{row.get('代號','')} {row.get('公司','')}** 還剩 {rd} 天到期，現報酬率：{ret}%")
+                    ret = row.get('報酬率(%)', '—')
+                    
+                if rd <= 0:
+                    st.error(f"🔴 **{code} {row.get('公司','')}** 已達60天，建議賣出！現報酬率估：{ret}%")
+                else:
+                    st.warning(f"🟡 **{code} {row.get('公司','')}** 還剩 {rd} 天到期，現報酬率估：{ret}%")
 
         # 顯示表格
         cols_active = ['報告日期', '公司', '代號', '買進日期', '買進價格', '賣出價格', '報酬率(%)', '持有天數', '距賣出天數']
         display_a = active[[c for c in cols_active if c in active.columns]].copy()
         display_a = display_a.rename(columns={'賣出價格': '現價'})
+        
+        for idx, row in display_a.iterrows():
+            code = str(row['代號'])
+            if code in jyf_prices:
+                current_price = float(jyf_prices[code])
+                display_a.at[idx, '現價'] = current_price
+                buy_price = row.get('買進價格')
+                if pd.notna(buy_price) and float(buy_price) > 0:
+                    display_a.at[idx, '報酬率(%)'] = round((current_price - float(buy_price)) / float(buy_price) * 100, 2)
+                    
         display_a['報酬率(%)'] = pd.to_numeric(display_a['報酬率(%)'], errors='coerce')
 
         styled_a = display_a.style\
@@ -522,34 +587,117 @@ with tab2:
             st.dataframe(styled_s, use_container_width=True)
 
 # ═══════════════════════════════════════════════════════════════════════
-# Part 3：績效圖表
+# Part 3：績效圖表 (改為追蹤個人持股)
 # ═══════════════════════════════════════════════════════════════════════
 with tab3:
-    st.header("📊 策略表現圖表分析")
+    st.header("📊 總結與績效圖表 (我的持股)")
     
-    if os.path.exists(JYF_CSV):
-        df_chart = pd.read_csv(JYF_CSV, encoding='utf-8')
-        settled_bt = df_chart[df_chart['狀態'] == '已結算'].copy()
-        settled_bt['報酬率(%)'] = pd.to_numeric(settled_bt['報酬率(%)'], errors='coerce')
+    portfolio = load_portfolio()
+    sold_list = [s for s in portfolio if s.get('status') == 'sold']
+    
+    if sold_list:
+        df_chart = pd.DataFrame(sold_list)
+        df_chart['買入價'] = pd.to_numeric(df_chart['buy_price'], errors='coerce')
+        df_chart['賣出價'] = pd.to_numeric(df_chart.get('sold_price', 0), errors='coerce')
+        df_chart['賣出日期'] = df_chart.get('sold_date', '')
+        
+        df_chart['報酬率(%)'] = df_chart.apply(
+            lambda r: round((r.get('賣出價', 0) - r['買入價']) / r['買入價'] * 100, 2) if pd.notna(r['買入價']) and r['買入價'] > 0 else 0,
+            axis=1
+        )
         
         c1, c2 = st.columns(2)
         with c1:
-            st.subheader("報酬率分布圖")
-            if not settled_bt.empty:
+            st.subheader("已實現報酬率分布圖")
+            if not df_chart.empty:
                 # 簡單分箱
                 bins = [-100, -20, -10, 0, 10, 20, 30, 50, 100, 500]
                 labels = ["<-20%", "-20~-10%", "-10~0%", "0~10%", "10~20%", "20~30%", "30~50%", "50~100%", ">100%"]
-                settled_bt['range'] = pd.cut(settled_bt['報酬率(%)'], bins=bins, labels=labels)
-                dist = settled_bt['range'].value_counts().reindex(labels)
+                df_chart['range'] = pd.cut(df_chart['報酬率(%)'], bins=bins, labels=labels)
+                dist = df_chart['range'].value_counts().reindex(labels)
                 st.bar_chart(dist)
         
         with c2:
-            st.subheader("時間軸報酬率 (散佈圖)")
-            if not settled_bt.empty:
-                chart_data = settled_bt[['報告日期', '報酬率(%)']].sort_values('報告日期')
-                st.line_chart(chart_data.set_index('報告日期'))
+            st.subheader("已實現損益時間軸 (單筆)")
+            if not df_chart.empty and '賣出日期' in df_chart:
+                chart_data = df_chart[df_chart['賣出日期'] != ''].copy()
+                chart_data['賣出日期'] = pd.to_datetime(chart_data['賣出日期'], errors='coerce')
+                chart_data = chart_data.dropna(subset=['賣出日期']).sort_values('賣出日期')
+                if not chart_data.empty:
+                    st.line_chart(chart_data.set_index('賣出日期')['報酬率(%)'])
+                else:
+                    st.info("日期格式不符，無法畫出折線圖。")
                 
         st.divider()
-        st.info("💡 圖表說明：左側分布圖可看出勝率結構，右側折線圖反映不同月份報告的單一表現。")
+        st.info("💡 圖表說明：目前此分頁已改為追蹤『您個人真實操作』，統計標記為【已賣出】的歷史持股績效分布與時間軸。")
     else:
-        st.warning("尚無回測資料可供視覺化")
+        st.warning("您目前尚未有『已賣出』的歷史持股紀錄，沒有資料可供製圖。如果想看到圖表，請先在第一頁點擊『賣出持股』來記錄獲利喔！")
+
+# ═══════════════════════════════════════════════════════════════════════
+# Part 4：AI 每日分析
+# ═══════════════════════════════════════════════════════════════════════
+with tab4:
+    st.header("🤖 AI 每日持股聯合診斷")
+    
+    st.info("💡 系統會自動抓取您的活躍持股，整理最新「均線技術面」與「即時新聞」，並交由 Google Gemini AI 大模型進行獨家個股診斷。")
+    
+    if st.button("🚀 一鍵產生今日所有持股的 AI 報告", type="primary"):
+        import daily_ai_analysis as ai_script
+        import yfinance as yf
+        import pandas as pd
+        
+        portfolio = load_portfolio()
+        active_stocks = [s for s in portfolio if s.get('status', 'active') == 'active']
+        
+        if not active_stocks:
+            st.warning("目前沒有活躍持股可供分析，請先至「我的持股」新增。")
+        else:
+            with st.spinner(f"正在對 {len(active_stocks)} 檔持股進行深度 AI 分析，這可能需要幾十秒，請稍候..."):
+                for stock in active_stocks:
+                    code = stock['code']
+                    name = stock.get('name', code)
+                    ticker_tw = f"{code}.TW"
+                    
+                    st.divider()
+                    st.subheader(f"📊 【{code} {name}】 專屬診斷")
+                    
+                    try:
+                        ticker = yf.Ticker(ticker_tw)
+                        hist = ticker.history(period="1mo")
+                        if hist.empty:
+                            ticker_two = f"{code}.TWO"
+                            ticker = yf.Ticker(ticker_two)
+                            hist = ticker.history(period="1mo")
+                    except Exception:
+                        hist = pd.DataFrame()
+                        
+                    tech_summary = ai_script.calculate_technical_indicators(hist)
+                    
+                    try:
+                        news_data = ticker.news
+                        news_titles = [item['title'] for item in news_data[:3]] if news_data else ["今日無相關重大新聞..."]
+                    except Exception:
+                        news_titles = ["新聞爬取失敗"]
+                        
+                    # 顯示技術面與新聞摘要
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.markdown("**📌 今日技術面觀測：**")
+                        st.code(tech_summary)
+                    with c2:
+                        st.markdown("**📰 市場最新重點新聞：**")
+                        for idx, title in enumerate(news_titles, 1):
+                            st.caption(f"{idx}. {title}")
+                            
+                    # 呼叫外部 AI 產生報告
+                    report = ai_script.call_ai_for_analysis(f"{code} {name}", tech_summary, news_titles)
+                    
+                    st.markdown("### 🤖 操作建議與解讀")
+                    if report.startswith("⚠️") or report.startswith("❌"):
+                        st.error(report)
+                    else:
+                        st.success(report)
+                
+                st.balloons()
+                st.success("✅ 今日所有持股的 AI 分析報告已產生完成！")
+
