@@ -19,20 +19,24 @@ PORTFOLIO_FILE = os.path.join(BASE_DIR, 'portfolio.json')
 # 載入 .env 檔案中的環境變數
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
-def call_ai_for_analysis(stock_name, technical_data, news_headlines):
+def call_ai_for_analysis(stock_name, technical_data, fundamental_data, news_headlines):
     """
     這裡負責將整理好的台股數據，傳送給大語言模型 (LLM) 進行分析。
     """
     prompt = f"""
 請扮演一位專業的台股分析師。
 我的持股：{stock_name}
+
 今日技術面資訊：
 - {technical_data}
+
+基本面與籌碼面資訊：
+- {fundamental_data}
 
 今日最新新聞標題：
 {chr(10).join(f'- {n}' for n in news_headlines)}
 
-請根據以上資料，給我一份針對這檔股票的簡短操作建議與解讀。
+請根據以上資料（包含技術線型、基本面與籌碼面變化、以及新聞），給我一份針對這檔股票的簡短綜合操作建議與解讀。
 """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -48,6 +52,8 @@ def call_ai_for_analysis(stock_name, technical_data, news_headlines):
             model='gemini-2.5-flash',
             contents=prompt,
         )
+        from utils.helpers import increment_gemini_call
+        increment_gemini_call()
         return response.text.replace('\n\n', '\n').strip()
     except Exception as e:
         return f"❌ 呼叫 Gemini AI 發生錯誤：{str(e)}"
@@ -72,6 +78,23 @@ def calculate_technical_indicators(df):
         
     return f"收盤: {close_today:.2f} | 5MA: {ma5:.2f} | 20MA (月線): {ma20:.2f} | 目前均線狀態: {trend}"
 
+def get_fundamental_and_chip_data(ticker):
+    """獲取基本面與籌碼面數據 (透過 yfinance info)"""
+    try:
+        info = ticker.info
+        pe = info.get('trailingPE', 'N/A')
+        if type(pe) in (float, int): pe = f"{pe:.2f} 倍"
+        
+        roe = info.get('returnOnEquity', 'N/A')
+        if type(roe) in (float, int): roe = f"{roe*100:.2f}%"
+        
+        inst_hold = info.get('heldPercentInstitutions', 'N/A')
+        if type(inst_hold) in (float, int): inst_hold = f"{inst_hold*100:.2f}%"
+        
+        return f"本益比 (P/E): {pe} | 股東權益報酬率 (ROE): {roe} | 外資及機構法人持股比例: {inst_hold}"
+    except Exception:
+        return "基本面與籌碼面數據爬取失敗或暫無資料"
+
 def main():
     print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 開始執行每日 AI 持股分析...")
     print("=" * 60)
@@ -91,6 +114,8 @@ def main():
         
     print(f"📊 總共需要分析 {len(active_stocks)} 檔您目前擁有的持股")
     print("-" * 60)
+    
+    all_reports = []
     
     for stock in active_stocks:
         code = stock['code']
@@ -113,6 +138,9 @@ def main():
             
         tech_summary = calculate_technical_indicators(hist)
         
+        # 1.5 獲取基本面與籌碼面數據
+        fund_summary = get_fundamental_and_chip_data(ticker)
+        
         # 2. 獲取最新新聞 (yfinance 的 news 欄位)
         try:
             news_data = ticker.news
@@ -121,13 +149,24 @@ def main():
             news_titles = ["新聞爬取失敗"]
         
         # 3. 呼叫 AI 產生分析報告
-        analysis_report = call_ai_for_analysis(f"{code} {name}", tech_summary, news_titles)
+        analysis_report = call_ai_for_analysis(f"{code} {name}", tech_summary, fund_summary, news_titles)
+        
+        # 將結果存入列表
+        all_reports.append({
+            'code': code,
+            'name': name,
+            'tech_summary': tech_summary,
+            'fund_summary': fund_summary,
+            'news_titles': news_titles,
+            'report': analysis_report
+        })
         
         # 4. 印出排版過的報告
         print("\n" + "★" * 60)
         print(f" 📈 【{code} {name}】 每日報告")
         print("★" * 60)
         print(f" ▌技術面：\n   {tech_summary}\n")
+        print(f" ▌基本面與籌碼面：\n   {fund_summary}\n")
         print(" ▌最新新聞：")
         for idx, title in enumerate(news_titles, 1):
             print(f"   {idx}. {title}")
@@ -135,6 +174,22 @@ def main():
         print("=" * 60)
         
     print(f"\n✅ 今日分析報告已產生完畢！")
+    
+    # 寫入存檔 ai_reports.json，讓前端可以直接讀取
+    output_path = os.path.join(BASE_DIR, 'ai_reports.json')
+    final_output = { # Renamed the dictionary to final_output to match the user's snippet
+        'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'reports': all_reports
+    }
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(final_output, f, ensure_ascii=False, indent=2)
+        
+    print(f"\n✅ 報告已儲存至快取檔案: {output_path}") # Changed ai_report_file to output_path
+    
+    # 5. 順便紀錄今日的總資產與淨資產歷史 (供淨資產成長曲線使用)
+    from utils.helpers import record_daily_net_worth
+    record_daily_net_worth()
+    print("✅ 今日淨資產歷史軌跡已結算並紀錄完成！")
 
 if __name__ == "__main__":
     main()
