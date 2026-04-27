@@ -2,7 +2,8 @@
  * networth.js — 總資產管理 tab
  */
 
-import { networth as nwApi, assets as assetsApi } from '../api/sheets.js';
+import { networth as nwApi, assets as assetsApi, holdings as hApi } from '../api/sheets.js';
+import { fetchPrices } from '../api/prices.js';
 import { fmtTwd, fmtDate, colorClass } from '../lib/format.js';
 import { isConfigured, canWrite } from '../config.js';
 
@@ -14,43 +15,54 @@ export async function initNetWorth(root) {
   }
 
   try {
-    const [history, assetsData] = await Promise.all([
+    const [history, assetsData, holdingsData] = await Promise.all([
       nwApi.list(),
-      assetsApi.list()
+      assetsApi.list(),
+      hApi.list()
     ]);
-    renderNetWorth(root, history, assetsData);
+    renderNetWorth(root, history, assetsData, holdingsData);
   } catch (e) {
     root.innerHTML = `<p class="loss" style="padding:2rem">載入失敗：${e.message}</p>`;
   }
 }
 
-function renderNetWorth(root, history, assetsData) {
+function renderNetWorth(root, history, assetsData, holdingsData) {
   const latest = history.length ? history[history.length - 1] : null;
   const prev = history.length > 1 ? history[history.length - 2] : null;
   const totalAssets = (assetsData.assets || []).reduce((s, a) => s + Number(a.value || 0), 0);
   const totalLiab = (assetsData.liabilities || []).reduce((s, l) => s + Number(l.amount || 0), 0);
 
+  const filterCash = a => (a.category || '').includes('現金') || (a.category || '').includes('cash') || (a.name || '').includes('證券');
+  const totalCash = (assetsData.assets || []).filter(filterCash).reduce((s, a) => s + Number(a.value || 0), 0);
+
+  // 計算即時持股市值
+  const activeHoldings = (holdingsData || []).filter(h => h.status === 'active');
+  const symbols = activeHoldings.map(h => h.symbol);
+  
+  // 背景抓取現價後重新渲染即時數字
+  let liveStockValue = 0;
+  activeHoldings.forEach(h => { liveStockValue += (h.buy_price || 0) * (h.qty || 0); }); // initial fallback
+  
   const change = (latest && prev)
     ? Number(latest.total) - Number(prev.total) : null;
 
   root.innerHTML = `
-    <div class="stat-row">
-      <div class="card">
-        <div class="card-title">最新淨值</div>
-        <div class="card-value">${latest ? fmtTwd(latest.total) : '—'}</div>
-        ${change != null ? `<small class="${colorClass(change)}">${change >= 0 ? '+' : ''}${fmtTwd(change)} 較上次</small>` : ''}
+    <div style="margin-bottom: var(--space-4);">
+      <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: var(--space-4); margin-top: 0;">動態即時淨資產</h2>
+      <p class="muted" style="margin-bottom:var(--space-4);">此區數值已與您的即時「持股現值」連動，下方為即時動態結算：</p>
+    </div>
+    <div class="top-stats-grid">
+      <div class="stat-card total-asset-card">
+        <div class="asset-title">即時淨資產預估</div>
+        <div class="asset-value" id="dynamic-net-worth">...</div>
       </div>
-      <div class="card">
-        <div class="card-title">現金（TWD）</div>
-        <div class="card-value">${latest ? fmtTwd(latest.cash_twd) : '—'}</div>
+      <div class="stat-card">
+        <div class="pnl-title">現金/交割戶</div>
+        <div class="pnl-value" style="color:var(--text-primary);">${fmtTwd(totalCash)}</div>
       </div>
-      <div class="card">
-        <div class="card-title">持股市值</div>
-        <div class="card-value">${latest ? fmtTwd(latest.stocks_value) : '—'}</div>
-      </div>
-      <div class="card">
-        <div class="card-title">其他資產</div>
-        <div class="card-value">${fmtTwd(totalAssets)}</div>
+      <div class="stat-card">
+        <div class="pnl-title">即時持股市值</div>
+        <div class="pnl-value" style="color:var(--text-primary);" id="dynamic-stock-value">...</div>
       </div>
     </div>
 
@@ -67,6 +79,27 @@ function renderNetWorth(root, history, assetsData) {
     bindSnapshotForm(root, latest);
     bindAssetsActions(root, assetsData);
   }
+
+  // 非同步抓取最新報價，更動畫面
+  fetchPrices(symbols).then(priceMap => {
+    let realStockVal = 0;
+    activeHoldings.forEach(h => {
+      const p = priceMap.get(h.symbol);
+      const px = p ? p.price : (h.buy_price || 0);
+      realStockVal += px * (h.qty || 0);
+    });
+    const liveNetWorth = totalAssets + realStockVal - totalLiab;
+    const nwEl = root.querySelector('#dynamic-net-worth');
+    const svEl = root.querySelector('#dynamic-stock-value');
+    if (nwEl) nwEl.textContent = fmtTwd(liveNetWorth);
+    if (svEl) svEl.textContent = fmtTwd(realStockVal);
+
+    // Update snapshot defaults invisibly
+    root.dataset.liveStockValue = realStockVal;
+    root.dataset.totalCash = totalCash;
+    root.dataset.otherAssets = totalAssets - totalCash;
+    root.dataset.totalLiab = totalLiab;
+  });
 }
 
 function renderSnapshotForm() {
@@ -176,6 +209,15 @@ function bindSnapshotForm(root, latest) {
     root.querySelector('#snap-other').value = latest.other_assets || 0;
     root.querySelector('#snap-liab').value = latest.liabilities || 0;
   }
+
+  // 如果有觸發紀錄快照，幫忙自動填入最新即時算出來的值
+  root.querySelector('.add-form summary').addEventListener('click', () => {
+    if (!root.dataset.liveStockValue) return; // 價格還沒抓完
+    root.querySelector('#snap-cash').value = root.dataset.totalCash || 0;
+    root.querySelector('#snap-stocks').value = root.dataset.liveStockValue || 0;
+    root.querySelector('#snap-other').value = root.dataset.otherAssets || 0;
+    root.querySelector('#snap-liab').value = root.dataset.totalLiab || 0;
+  });
 
   root.querySelector('#snapshot-form').addEventListener('submit', async () => {
     const btn = root.querySelector('#snap-btn');
