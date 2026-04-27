@@ -24,44 +24,47 @@ function cacheTtl() {
 }
 
 /**
- * Normalize symbol: "2330" → "2330.TW", "6505.TWO" stays
+ * 內部共用的 Yahoo API 呼叫 (回傳 meta)
  */
-function toYahooSymbol(raw) {
-  if (/\.(TW|TWO)$/i.test(raw)) return raw;
-  return raw + '.TW';
+async function doFetchYahooChart(ySymbol, range = '5d') {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySymbol)}?interval=1d&range=${range}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.chart?.result?.[0]?.meta || null;
+  } catch (_) {
+    return null;
+  }
 }
 
 /**
  * Fetch a single stock's current price via Yahoo Finance.
- * Returns { symbol, price, prevClose, change, changePct } or null.
+ * Automatically tries .TW then .TWO
  */
 async function fetchYahoo(symbol) {
-  const ySymbol = toYahooSymbol(symbol);
-  const cacheKey = 'price_' + ySymbol;
+  const cacheKey = 'price_' + symbol;
   const cached = ttlGet(cacheKey);
   if (cached) return cached;
 
-  try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySymbol)}?interval=1d&range=5d`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const meta = data?.chart?.result?.[0]?.meta;
-    if (!meta) return null;
-
-    const result = {
-      symbol,
-      price: meta.regularMarketPrice,
-      prevClose: meta.previousClose || meta.chartPreviousClose,
-      change: meta.regularMarketPrice - (meta.previousClose || meta.chartPreviousClose),
-      changePct: ((meta.regularMarketPrice - (meta.previousClose || meta.chartPreviousClose)) /
-                  (meta.previousClose || meta.chartPreviousClose)) * 100
-    };
-    ttlSet(cacheKey, result, cacheTtl());
-    return result;
-  } catch (_) {
-    return null;
+  const suffixes = /\.(TW|TWO)$/i.test(symbol) ? [''] : ['.TW', '.TWO'];
+  
+  for (const suffix of suffixes) {
+    const meta = await doFetchYahooChart(symbol + suffix, '5d');
+    if (meta) {
+      const result = {
+        symbol,
+        price: meta.regularMarketPrice,
+        prevClose: meta.previousClose || meta.chartPreviousClose,
+        change: meta.regularMarketPrice - (meta.previousClose || meta.chartPreviousClose),
+        changePct: ((meta.regularMarketPrice - (meta.previousClose || meta.chartPreviousClose)) /
+                    (meta.previousClose || meta.chartPreviousClose)) * 100
+      };
+      ttlSet(cacheKey, result, cacheTtl());
+      return result;
+    }
   }
+  return null;
 }
 
 /**
@@ -126,17 +129,17 @@ export async function lookupName(symbol) {
   const cached = ttlGet(cacheKey);
   if (cached) return cached;
 
-  try {
-    const ySymbol = toYahooSymbol(symbol);
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySymbol)}?interval=1d&range=1d`;
-    const res = await fetch(url);
-    if (!res.ok) return '';
-    const data = await res.json();
-    const meta = data?.chart?.result?.[0]?.meta;
-    const name = meta?.longName || meta?.shortName || '';
-    if (name) ttlSet(cacheKey, name, 86400);
-    return name;
-  } catch (_) {
-    return '';
+  const suffixes = /\.(TW|TWO)$/i.test(symbol) ? [''] : ['.TW', '.TWO'];
+  
+  for (const suffix of suffixes) {
+    const meta = await doFetchYahooChart(symbol + suffix, '1d');
+    if (meta) {
+      const name = meta.longName || meta.shortName || '';
+      if (name) {
+        ttlSet(cacheKey, name, 86400);
+        return name;
+      }
+    }
   }
+  return '';
 }
