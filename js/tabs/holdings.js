@@ -4,8 +4,7 @@
 
 import { holdings as api } from '../api/sheets.js';
 import { fetchPrices, lookupName } from '../api/prices.js';
-import { fmtTwd, fmtNum, fmtPct, fmtDate, colorClass, expiryClass, expiryLabel } from '../lib/format.js';
-import { notifyExpiring } from '../lib/alerts.js';
+import { fmtTwd, fmtNum, fmtPct, fmtDate, colorClass } from '../lib/format.js';
 import { isConfigured, canWrite } from '../config.js';
 
 export async function initHoldings(root) {
@@ -45,8 +44,6 @@ async function renderHoldings(root, rows) {
   const totalVal = enriched.reduce((s, r) => s + (r.marketVal ?? Number(r.avg_cost) * Number(r.shares)), 0);
   const totalPnl = totalVal - totalCost;
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
-
-  notifyExpiring(enriched).catch(() => {});
 
   root.innerHTML = `
     ${renderAddForm()}
@@ -145,9 +142,8 @@ function renderTable(rows) {
     return `<p class="muted" style="padding:2rem;text-align:center">尚無持股，點上方「新增持股」開始。</p>`;
   }
   const trs = rows.map(r => {
-    const rowClass = expiryClass(r.expiry_date);
     return `
-      <tr class="${rowClass}" data-id="${r.id}">
+      <tr data-id="${r.id}">
         <td><strong>${r.symbol}</strong><br><small class="muted">${r.name || ''}</small></td>
         <td class="right">${fmtNum(r.shares, 0)}</td>
         <td class="right">${fmtTwd(r.avg_cost)}</td>
@@ -156,7 +152,6 @@ function renderTable(rows) {
         <td class="right">${r.marketVal != null ? fmtTwd(r.marketVal) : '—'}</td>
         <td class="right ${colorClass(r.pnl)}">${r.pnl != null ? fmtTwd(r.pnl) : '—'}</td>
         <td class="right ${colorClass(r.pnlPct)}">${r.pnlPct != null ? fmtPct(r.pnlPct) : '—'}</td>
-        <td class="${rowClass}">${fmtDate(r.expiry_date)}<br><small>${expiryLabel(r.expiry_date)}</small></td>
         <td>
           <button class="btn-sm secondary sell-btn" data-id="${r.id}">賣出</button>
           <button class="btn-sm secondary btn-danger del-btn" data-id="${r.id}">刪除</button>
@@ -176,7 +171,6 @@ function renderTable(rows) {
             <th class="right">市值</th>
             <th class="right">損益</th>
             <th class="right">損益%</th>
-            <th>到期日</th>
             <th>操作</th>
           </tr>
         </thead>
