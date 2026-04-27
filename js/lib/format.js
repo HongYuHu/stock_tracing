@@ -50,3 +50,12 @@ export function expiryLabel(dateStr) {
   if (d === 0) return '今日到期';
   return `剩 ${d} 天`;
 }
+
+export function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}

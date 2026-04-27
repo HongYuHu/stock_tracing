@@ -3,7 +3,7 @@
  */
 
 import { ai as aiApi } from '../api/sheets.js';
-import { fmtDate } from '../lib/format.js';
+import { fmtDate, escapeHtml } from '../lib/format.js';
 import { isConfigured } from '../config.js';
 
 export async function initAI(root) {
@@ -44,6 +44,7 @@ function renderAI(root, reports) {
   // Filter controls
   const symbols = [...new Set(reports.map(r => r.symbol))].sort();
 
+  root.innerHTML = `
     <div style="display:flex;gap:.75rem;align-items:center;margin-bottom:1rem;justify-content:space-between;flex-wrap:wrap">
       <div style="display:flex;gap:.75rem;align-items:center;">
         <label style="margin:0;font-size:.875rem;display:flex;align-items:center;gap:.4rem">
@@ -136,13 +137,6 @@ function bindToggle(root) {
   });
 }
 
-function escapeHtml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 async function runManualGeneration(root, apiKey) {
   const btn = root.querySelector('#btn-generate-ai');

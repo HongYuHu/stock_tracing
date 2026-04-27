@@ -3,7 +3,7 @@
  */
 
 import { networth as nwApi, realized as realizedApi } from '../api/sheets.js';
-import { fmtTwd, fmtDate, fmtPct, colorClass } from '../lib/format.js';
+import { fmtTwd, fmtDate, fmtPct, colorClass, escapeHtml } from '../lib/format.js';
 import { isConfigured } from '../config.js';
 
 let networthChart = null;
@@ -33,28 +33,53 @@ function renderPerformance(root, history, realized) {
   const avgReturn = realized.length
     ? realized.reduce((s, r) => s + Number(r.pnl_pct || 0), 0) / realized.length : 0;
 
+  const bestTrade = realized.length
+    ? realized.reduce((best, r) => Number(r.pnl_pct) > Number(best.pnl_pct) ? r : best, realized[0])
+    : null;
+  const worstTrade = realized.length
+    ? realized.reduce((worst, r) => Number(r.pnl_pct) < Number(worst.pnl_pct) ? r : worst, realized[0])
+    : null;
+
   root.innerHTML = `
-    <div class="stat-row">
-      <div class="card">
+    <div class="stats-grid-4">
+      <div class="stat-card total-asset-card">
         <div class="card-title">已實現損益</div>
         <div class="card-value ${colorClass(totalPnl)}">${fmtTwd(totalPnl)}</div>
       </div>
-      <div class="card">
+      <div class="stat-card">
         <div class="card-title">勝率</div>
-        <div class="card-value">${fmtPct(winRate)}</div>
+        <div class="card-value">${realized.length ? winRate.toFixed(1) + '%' : '—'}</div>
       </div>
-      <div class="card">
+      <div class="stat-card">
         <div class="card-title">平均報酬</div>
-        <div class="card-value ${colorClass(avgReturn)}">${fmtPct(avgReturn)}</div>
+        <div class="card-value ${colorClass(avgReturn)}">${realized.length ? fmtPct(avgReturn) : '—'}</div>
       </div>
-      <div class="card">
+      <div class="stat-card">
         <div class="card-title">交易筆數</div>
         <div class="card-value">${realized.length}</div>
       </div>
     </div>
 
+    ${realized.length >= 2 ? `
+    <div class="top-stats-grid" style="margin-bottom:var(--space-6)">
+      <div class="stat-card ${bestTrade && Number(bestTrade.pnl_pct) > 0 ? 'is-gain' : ''}">
+        <div class="pnl-title">🏆 最佳單筆</div>
+        <div class="pnl-value gain" style="font-size:1.5rem">${bestTrade ? fmtPct(bestTrade.pnl_pct) : '—'}</div>
+        <div class="muted" style="font-size:.75rem;margin-top:4px">${bestTrade ? escapeHtml(bestTrade.symbol) + ' · ' + fmtDate(bestTrade.sell_date) : ''}</div>
+      </div>
+      <div class="stat-card ${worstTrade && Number(worstTrade.pnl_pct) < 0 ? 'is-loss' : ''}">
+        <div class="pnl-title">📉 最差單筆</div>
+        <div class="pnl-value loss" style="font-size:1.5rem">${worstTrade ? fmtPct(worstTrade.pnl_pct) : '—'}</div>
+        <div class="muted" style="font-size:.75rem;margin-top:4px">${worstTrade ? escapeHtml(worstTrade.symbol) + ' · ' + fmtDate(worstTrade.sell_date) : ''}</div>
+      </div>
+      <div class="stat-card">
+        <div class="pnl-title">📊 總交易金額</div>
+        <div class="pnl-value" style="color:var(--text-primary);font-size:1.5rem">${fmtTwd(realized.reduce((s,r) => s + Number(r.sell_price||0)*Number(r.shares||0), 0))}</div>
+      </div>
+    </div>` : ''}
+
     <h3>淨值走勢</h3>
-    <div class="chart-container card">
+    <div class="chart-container">
       <canvas id="networth-chart"></canvas>
     </div>
 
@@ -146,7 +171,7 @@ function renderRealizedTable(rows) {
   const sorted = [...rows].sort((a, b) => b.sell_date > a.sell_date ? 1 : -1);
   const trs = sorted.map(r => `
     <tr>
-      <td><strong>${r.symbol}</strong><br><small class="muted">${r.name || ''}</small></td>
+      <td><strong>${escapeHtml(r.symbol)}</strong><br><small class="muted">${escapeHtml(r.name)}</small></td>
       <td class="right">${Number(r.shares).toLocaleString()}</td>
       <td class="right">${fmtTwd(r.buy_price)}</td>
       <td class="right">${fmtTwd(r.sell_price)}</td>

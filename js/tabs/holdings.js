@@ -4,7 +4,7 @@
 
 import { holdings as api } from '../api/sheets.js';
 import { fetchPrices, lookupName } from '../api/prices.js';
-import { fmtTwd, fmtNum, fmtPct, fmtDate, colorClass } from '../lib/format.js';
+import { fmtTwd, fmtNum, fmtPct, fmtDate, colorClass, escapeHtml } from '../lib/format.js';
 import { isConfigured, canWrite } from '../config.js';
 
 export async function initHoldings(root) {
@@ -55,6 +55,7 @@ async function renderHoldings(root, rows) {
 
   bindAddForm(root, rows, enriched);
   bindTableActions(root, enriched);
+  updateSidebarPortfolio(totalVal, totalPnl, totalPnlPct);
 }
 
 // ── Stats row ─────────────────────────────────────────────────────────
@@ -145,20 +146,23 @@ function renderTable(rows) {
     return `<p class="muted" style="padding:2rem;text-align:center">尚無持股，點上方「新增持股」開始。</p>`;
   }
   const trs = rows.map(r => {
+    const rowClass = r.pnl != null ? (r.pnl > 0 ? 'row-gain' : r.pnl < 0 ? 'row-loss' : '') : '';
+    const changeArrow = r.changePct != null
+      ? `<br><small class="${colorClass(r.changePct)}">${r.changePct >= 0 ? '▲' : '▼'} ${Math.abs(r.changePct).toFixed(2)}%</small>`
+      : '';
     return `
-      <tr data-id="${r.id}">
-        <td><strong>${r.symbol}</strong><br><small class="muted">${r.name || ''}</small></td>
+      <tr data-id="${r.id}" class="${rowClass}">
+        <td><strong>${escapeHtml(r.symbol)}</strong><br><small class="muted">${escapeHtml(r.name)}</small></td>
         <td class="right">${fmtNum(r.shares, 0)}</td>
         <td class="right">${fmtTwd(r.avg_cost)}</td>
-        <td class="right">${r.price != null ? fmtTwd(r.price) : '—'}
-          ${r.changePct != null ? `<br><small class="${colorClass(r.changePct)}">${fmtPct(r.changePct)}</small>` : ''}</td>
+        <td class="right">${r.price != null ? fmtTwd(r.price) : '—'}${changeArrow}</td>
         <td class="right">${r.marketVal != null ? fmtTwd(r.marketVal) : '—'}</td>
         <td class="right ${colorClass(r.pnl)}">${r.pnl != null ? fmtTwd(r.pnl) : '—'}</td>
         <td class="right ${colorClass(r.pnlPct)}">${r.pnlPct != null ? fmtPct(r.pnlPct) : '—'}</td>
-        <td>
-          <button class="btn-sm secondary sell-btn" data-id="${r.id}">賣出</button>
-          <button class="btn-sm secondary edit-btn" data-id="${r.id}">編輯</button>
-          <button class="btn-sm secondary btn-danger del-btn" data-id="${r.id}">刪除</button>
+        <td style="white-space:nowrap">
+          <button class="btn-sm secondary sell-btn" data-id="${r.id}" title="賣出">📤</button>
+          <button class="btn-sm secondary edit-btn" data-id="${r.id}" title="編輯">✏️</button>
+          <button class="btn-sm secondary btn-danger del-btn" data-id="${r.id}" title="刪除">🗑️</button>
         </td>
       </tr>`;
   }).join('');
@@ -279,13 +283,18 @@ function bindAddForm(root, existingRows, enriched) {
     if (code.length < 4) return;
     lookupTimer = setTimeout(async () => {
       statusEl.textContent = '查詢中…';
-      const [name, priceData] = await Promise.all([
-        lookupName(code),
-        fetchPrices([code]).then(m => m.get(code))
-      ]);
-      if (name) nameInput.value = name;
-      if (priceData?.price) costInput.value = priceData.price.toFixed(2);
-      statusEl.textContent = name ? `✅ ${name}` : '查無公司名';
+      try {
+        const [name, priceData] = await Promise.all([
+          lookupName(code),
+          fetchPrices([code]).then(m => m.get(code))
+        ]);
+        if (name) nameInput.value = name;
+        if (priceData?.price) costInput.value = priceData.price.toFixed(2);
+        statusEl.textContent = name ? `✅ ${name}` : '查無公司名';
+      } catch (e) {
+        statusEl.textContent = '查詢失敗';
+        console.warn('Symbol lookup error:', e.message);
+      }
     }, 600);
   });
 
@@ -368,7 +377,7 @@ function bindTableActions(root, rows) {
       const row = rows.find(r => r.id === id);
       if (!row) return;
       root.querySelector('#sell-id').value = id;
-      root.querySelector('#sell-symbol').value = `${row.symbol} ${row.name || ''}`;
+      root.querySelector('#sell-symbol').value = `${row.symbol} ${row.name || ''}`.trim();
       root.querySelector('#sell-shares').value = row.shares;
       root.querySelector('#sell-shares').max = row.shares;
       root.querySelector('#sell-price').value = row.price?.toFixed(2) || '';
@@ -466,6 +475,18 @@ function bindTableActions(root, rows) {
         initHoldings(root);
       });
   });
+}
+
+function updateSidebarPortfolio(totalVal, totalPnl, totalPnlPct) {
+  const valEl = document.getElementById('sidebar-total-val');
+  const pnlEl = document.getElementById('sidebar-total-pnl');
+  if (!valEl) return;
+  valEl.textContent = fmtTwd(totalVal);
+  if (pnlEl) {
+    const sign = totalPnl >= 0 ? '+' : '';
+    pnlEl.textContent = `${sign}${fmtTwd(totalPnl)} (${sign}${fmtPct(totalPnlPct)})`;
+    pnlEl.className = `sidebar-portfolio-pnl ${colorClass(totalPnl)}`;
+  }
 }
 
 function renderSkeleton() {

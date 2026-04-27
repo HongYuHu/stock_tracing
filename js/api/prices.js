@@ -33,7 +33,8 @@ async function doFetchYahooChart(ySymbol, range = '5d') {
     if (!res.ok) return null;
     const data = await res.json();
     return data?.chart?.result?.[0]?.meta || null;
-  } catch (_) {
+  } catch (e) {
+    console.warn(`Yahoo fetch failed for ${ySymbol}:`, e.message);
     return null;
   }
 }
@@ -87,7 +88,8 @@ async function fetchViaProxy(symbol) {
         ? ((json.data.price - json.data.prev_close) / json.data.prev_close) * 100
         : 0
     };
-  } catch (_) {
+  } catch (e) {
+    console.warn(`GAS proxy failed for ${symbol}:`, e.message);
     return null;
   }
 }

@@ -13,6 +13,7 @@ async function gasGet(action, params = {}) {
 
   const qs = new URLSearchParams({ action, token: readToken, ...params }).toString();
   const res = await fetch(`${gasUrl}?${qs}`);
+  if (!res.ok) throw new Error(`GAS 回應錯誤 ${res.status}`);
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'API error');
   return json.data;
@@ -29,6 +30,7 @@ async function gasPost(action, body = {}) {
     headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify({ action, token: writeToken, ...body })
   });
+  if (!res.ok) throw new Error(`GAS 回應錯誤 ${res.status}`);
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'API write error');
   return json.data;

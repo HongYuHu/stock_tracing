@@ -6,6 +6,10 @@
   <meta name="description" content="個人股票追蹤系統 — 跨裝置持股管理" />
   <title>📈 股票追蹤系統</title>
 
+  <meta property="og:title" content="股票追蹤系統" />
+  <meta property="og:description" content="個人股票追蹤系統 — 跨裝置持股管理" />
+  <link rel="apple-touch-icon" href="manifest.webmanifest" />
+
   <!-- Google Fonts: Inter + Noto Sans TC + JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,7 +35,7 @@
 
 <div class="app-layout">
   <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
       <span class="app-logo"><span>股票追蹤系統</span></span>
     </div>
@@ -43,12 +47,22 @@
         <li><a href="#" class="tab-link" data-tab="ai" onclick="switchTab('ai', this)"><span class="tab-icon">✨</span> AI 分析</a></li>
       </ul>
     </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-portfolio">
+        <div class="sidebar-portfolio-label">總持股市值</div>
+        <div class="sidebar-portfolio-value" id="sidebar-total-val">—</div>
+        <div class="sidebar-portfolio-pnl" id="sidebar-total-pnl"></div>
+      </div>
+    </div>
   </aside>
+  <!-- Mobile overlay -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 
   <!-- ── Main Content Area ────────────────────────────────────────────── -->
   <div class="main-wrapper">
     <header class="top-header">
       <div class="header-actions">
+        <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="選單">☰</button>
         <span id="market-status" class="market-badge"></span>
         <button class="icon-btn" id="settings-btn" onclick="openSettings()" title="設定">⚙</button>
       </div>
@@ -57,23 +71,47 @@
     <main class="content-area" id="main-content">
       <!-- HOLDINGS TAB -->
       <section id="tab-holdings" class="tab-content active">
+        <div class="page-header">
+          <div class="page-header-left">
+            <h1 class="page-title">我的持股</h1>
+            <p class="page-subtitle">即時追蹤您的投資組合與未實現損益</p>
+          </div>
+        </div>
         <div id="holdings-root"></div>
       </section>
 
-  <!-- NET WORTH TAB -->
-  <section id="tab-networth" class="tab-content">
-    <div id="networth-root"></div>
-  </section>
+      <!-- NET WORTH TAB -->
+      <section id="tab-networth" class="tab-content">
+        <div class="page-header">
+          <div class="page-header-left">
+            <h1 class="page-title">資產配置</h1>
+            <p class="page-subtitle">淨資產動態結算 — 含現金、持股與負債</p>
+          </div>
+        </div>
+        <div id="networth-root"></div>
+      </section>
 
-  <!-- PERFORMANCE TAB -->
-  <section id="tab-performance" class="tab-content">
-    <div id="performance-root"></div>
-  </section>
+      <!-- PERFORMANCE TAB -->
+      <section id="tab-performance" class="tab-content">
+        <div class="page-header">
+          <div class="page-header-left">
+            <h1 class="page-title">投資績效</h1>
+            <p class="page-subtitle">已實現損益、勝率與資產走勢分析</p>
+          </div>
+        </div>
+        <div id="performance-root"></div>
+      </section>
 
-  <!-- AI TAB -->
-  <section id="tab-ai" class="tab-content">
-    <div id="ai-root"></div>
-  </section>
+      <!-- AI TAB -->
+      <section id="tab-ai" class="tab-content">
+        <div class="page-header">
+          <div class="page-header-left">
+            <h1 class="page-title">AI 智能分析</h1>
+            <p class="page-subtitle">由 Gemini 驅動的個股操作建議</p>
+          </div>
+        </div>
+        <div id="ai-root"></div>
+      </section>
 
     </main>
   </div>
@@ -109,6 +147,16 @@
   </article>
 </dialog>
 
+<!-- ── Mobile bottom navigation ─────────────────────────────────────── -->
+<nav class="bottom-nav" id="bottom-nav">
+  <ul>
+    <li><a href="#" class="tab-link active" data-tab="holdings" onclick="switchTab('holdings', this)"><span class="tab-icon">💼</span>持股</a></li>
+    <li><a href="#" class="tab-link" data-tab="networth" onclick="switchTab('networth', this)"><span class="tab-icon">💰</span>資產</a></li>
+    <li><a href="#" class="tab-link" data-tab="performance" onclick="switchTab('performance', this)"><span class="tab-icon">📈</span>績效</a></li>
+    <li><a href="#" class="tab-link" data-tab="ai" onclick="switchTab('ai', this)"><span class="tab-icon">✨</span>AI</a></li>
+  </ul>
+</nav>
+
 <!-- ── Toast notification ───────────────────────────────────────────── -->
 <div id="toast" class="toast" aria-live="polite"></div>
 
@@ -120,12 +168,24 @@
   import { initAI } from './js/tabs/ai.js';
   import { loadConfig, saveConfig, getConfig } from './js/config.js';
 
+  // ── Mobile sidebar ────────────────────────────────────────────────
+  window.toggleSidebar = function() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebar-overlay').classList.toggle('show');
+  };
+  window.closeSidebar = function() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('show');
+  };
+
   // ── Tab switching ──────────────────────────────────────────────────
   window.switchTab = function(tabId, el) {
     document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.tab-link').forEach(a => a.classList.remove('active'));
     document.getElementById('tab-' + tabId).classList.add('active');
-    if (el) el.classList.add('active');
+    // Sync both sidebar nav and bottom nav
+    document.querySelectorAll(`.tab-link[data-tab="${tabId}"]`).forEach(a => a.classList.add('active'));
+    closeSidebar();
 
     // Lazy init
     if (tabId === 'holdings' && !window._holdingsInited) {

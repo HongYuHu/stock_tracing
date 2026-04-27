@@ -6,9 +6,9 @@
 const CONFIG_KEY = 'stock_tracker_config';
 
 let _config = {
-  gasUrl: 'https://script.google.com/macros/s/AKfycbxlezHjp62m97RpoNKXCVUfk2pDPTGT9A2xc-iA_gisXk3sLdiKc5hahhMWMMp7B9c/exec',
-  readToken: 'read_abc123',
-  writeToken: '' // 若要預設開啟修改權限，請在此直接填入 write_ 打頭的密碼，但請確保您的 GitHub 庫為「Private」，以免密碼外洩！
+  gasUrl: 'https://script.google.com/macros/s/AKfycbxlezdHjp62m97RpoNKXCVUfk2pDPTGT9A2xc-iA_gisXk3sLdiKc5hahhMWMMp7B9c/exec',
+  readToken: '',
+  writeToken: ''
 };
 
 export function loadConfig() {

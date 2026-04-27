@@ -4,7 +4,7 @@
 
 import { networth as nwApi, assets as assetsApi, holdings as hApi } from '../api/sheets.js';
 import { fetchPrices } from '../api/prices.js';
-import { fmtTwd, fmtDate, colorClass } from '../lib/format.js';
+import { fmtTwd, fmtDate, colorClass, escapeHtml } from '../lib/format.js';
 import { isConfigured, canWrite } from '../config.js';
 
 export async function initNetWorth(root) {
@@ -41,7 +41,7 @@ function renderNetWorth(root, history, assetsData, holdingsData) {
   
   // 背景抓取現價後重新渲染即時數字
   let liveStockValue = 0;
-  activeHoldings.forEach(h => { liveStockValue += (h.buy_price || 0) * (h.qty || 0); }); // initial fallback
+  activeHoldings.forEach(h => { liveStockValue += (h.buy_price || 0) * (h.shares || 0); }); // initial fallback
   
   const change = (latest && prev)
     ? Number(latest.total) - Number(prev.total) : null;
@@ -86,7 +86,7 @@ function renderNetWorth(root, history, assetsData, holdingsData) {
     activeHoldings.forEach(h => {
       const p = priceMap.get(h.symbol);
       const px = p ? p.price : (h.buy_price || 0);
-      realStockVal += px * (h.qty || 0);
+      realStockVal += px * (h.shares || 0);
     });
     const liveNetWorth = totalAssets + realStockVal - totalLiab;
     const nwEl = root.querySelector('#dynamic-net-worth');
@@ -124,20 +124,20 @@ function renderSnapshotForm() {
 function renderAssetsTable(assetsList, liabList, totalLiab) {
   const assetRows = assetsList.map(a => `
     <tr>
-      <td>${a.name || ''}</td>
-      <td>${a.category || ''}</td>
+      <td>${escapeHtml(a.name)}</td>
+      <td>${escapeHtml(a.category)}</td>
       <td class="right">${fmtTwd(a.value)}</td>
-      <td>${a.currency || 'TWD'}</td>
-      ${canWrite() ? `<td><button class="btn-sm secondary btn-danger del-asset-btn" data-id="${a.id}" data-type="asset">刪除</button></td>` : '<td></td>'}
+      <td>${escapeHtml(a.currency || 'TWD')}</td>
+      ${canWrite() ? `<td><button class="btn-sm secondary btn-danger del-asset-btn" data-id="${escapeHtml(a.id)}" data-type="asset">刪除</button></td>` : '<td></td>'}
     </tr>`).join('');
 
   const liabRows = liabList.map(l => `
     <tr>
-      <td>${l.name || ''}</td>
+      <td>${escapeHtml(l.name)}</td>
       <td>負債</td>
       <td class="right loss">${fmtTwd(l.amount)}</td>
-      <td>${l.currency || 'TWD'}</td>
-      ${canWrite() ? `<td><button class="btn-sm secondary btn-danger del-asset-btn" data-id="${l.id}" data-type="liability">刪除</button></td>` : '<td></td>'}
+      <td>${escapeHtml(l.currency || 'TWD')}</td>
+      ${canWrite() ? `<td><button class="btn-sm secondary btn-danger del-asset-btn" data-id="${escapeHtml(l.id)}" data-type="liability">刪除</button></td>` : '<td></td>'}
     </tr>`).join('');
 
   const addAssetForm = canWrite() ? `
