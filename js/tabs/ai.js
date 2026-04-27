@@ -115,9 +115,9 @@ function renderReportCard(r) {
     <div class="ai-card">
       <div class="ai-card-header" data-toggle>
         <div style="display:flex;align-items:center;gap:.6rem">
-          <strong>${r.symbol}</strong>
+          <strong>${escapeHtml(r.symbol)}</strong>
           <span class="badge ${sentimentClass}">${sentimentLabel}</span>
-          ${r.target_price ? `<small class="muted">目標價 ${r.target_price}</small>` : ''}
+          ${r.target_price ? `<small class="muted">目標價 ${escapeHtml(r.target_price)}</small>` : ''}
         </div>
         <span class="toggle-icon">▼</span>
       </div>
@@ -136,7 +136,6 @@ function bindToggle(root) {
     });
   });
 }
-
 
 async function runManualGeneration(root, apiKey) {
   const btn = root.querySelector('#btn-generate-ai');
