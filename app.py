@@ -16,12 +16,16 @@ from datetime import datetime, date, timedelta
 from utils.helpers import (
     load_portfolio,
     save_portfolio,
+    load_assets,
+    save_assets,
     fetch_prices_batch,
     lookup_company_name,
     color_return,
     color_days,
     JYF_CSV,
-    HAS_YFINANCE
+    HAS_YFINANCE,
+    BASE_DIR,
+    NET_WORTH_HISTORY_FILE
 )
 import yfinance as yf
 
@@ -32,7 +36,7 @@ import yfinance as yf
 st.set_page_config(page_title="股票追蹤系統", page_icon="📈", layout="wide")
 st.title("📈 股票追蹤系統")
 
-tab1, tab2, tab3, tab4 = st.tabs(["📁 我的持股", "🔍 金玉峰追蹤", "📊 績效圖表", "🤖 AI 分析"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📁 我的持股", "🔍 金玉峰追蹤", "📊 績效圖表", "🤖 AI 分析", "💰 總資產管理"])
 
 # ═══════════════════════════════════════════════════════════════════════
 # Part 1：個人持股管理
@@ -495,13 +499,58 @@ with tab3:
 # ═══════════════════════════════════════════════════════════════════════
 with tab4:
     st.header("🤖 AI 每日持股聯合診斷")
-    
-    st.info("💡 系統會自動抓取您的活躍持股，整理最新「均線技術面」與「即時新聞」，並交由 Google Gemini AI 大模型進行獨家個股診斷。")
-    
-    if st.button("🚀 一鍵產生今日所有持股的 AI 報告", type="primary"):
+
+    # ── 即時 Google Search 按鈕（置頂）────────────────────────────────
+    st.markdown("#### ⚡ 立即抓取最新資訊")
+    st.caption("讓 Gemini 開啟 Google Search，主動搜尋每檔持股的最新新聞、籌碼、法說會資訊，不依賴快取。")
+
+    live_report_file = os.path.join(BASE_DIR, 'ai_live_reports.json')
+
+    def display_live_reports():
+        if os.path.exists(live_report_file):
+            with open(live_report_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            st.success(f"📡 即時搜尋結果（最後更新：{data.get('timestamp')}）")
+            for row in data.get('reports', []):
+                st.subheader(f"📡 【{row['code']} {row['name']}】即時搜尋結果")
+                report = row['report']
+                if report.startswith("⚠️") or report.startswith("❌"):
+                    st.error(report)
+                else:
+                    st.info(report)
+
+    display_live_reports()
+
+    if st.button("⚡ 立即讓 Gemini 搜尋所有持股最新資訊", type="primary", key="live_search_btn"):
         import daily_ai_analysis as ai_script
-        import yfinance as yf
-        import pandas as pd
+        portfolio = load_portfolio()
+        active_stocks = [s for s in portfolio if s.get('status', 'active') == 'active']
+        if not active_stocks:
+            st.warning("目前沒有活躍持股，請先至「我的持股」新增。")
+        else:
+            live_results = []
+            progress = st.progress(0, text="準備中…")
+            for i, stock in enumerate(active_stocks):
+                code = stock['code']
+                name = stock.get('name', code)
+                progress.progress((i) / len(active_stocks), text=f"🔍 Gemini 搜尋中：{code} {name}…")
+                report = ai_script.call_ai_with_live_search(code, name)
+                live_results.append({'code': code, 'name': name, 'report': report})
+            progress.progress(1.0, text="✅ 搜尋完成")
+
+            # 存檔，重新整理後仍可讀取
+            with open(live_report_file, 'w', encoding='utf-8') as f:
+                json.dump({
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'reports': live_results
+                }, f, ensure_ascii=False, indent=2)
+
+            st.rerun()
+
+    st.divider()
+    st.markdown("#### 📋 每日完整分析（含技術面 + 基本面）")
+    if st.button("🚀 (重新)一鍵產生今日所有持股的 AI 報告", type="secondary", key="full_report_btn"):
+        import daily_ai_analysis as ai_script
         
         portfolio = load_portfolio()
         active_stocks = [s for s in portfolio if s.get('status', 'active') == 'active']
@@ -510,51 +559,117 @@ with tab4:
             st.warning("目前沒有活躍持股可供分析，請先至「我的持股」新增。")
         else:
             with st.spinner(f"正在對 {len(active_stocks)} 檔持股進行深度 AI 分析，這可能需要幾十秒，請稍候..."):
-                for stock in active_stocks:
-                    code = stock['code']
-                    name = stock.get('name', code)
-                    ticker_tw = f"{code}.TW"
-                    
-                    st.divider()
-                    st.subheader(f"📊 【{code} {name}】 專屬診斷")
-                    
-                    try:
-                        ticker = yf.Ticker(ticker_tw)
-                        hist = ticker.history(period="1mo")
-                        if hist.empty:
-                            ticker_two = f"{code}.TWO"
-                            ticker = yf.Ticker(ticker_two)
-                            hist = ticker.history(period="1mo")
-                    except Exception:
-                        hist = pd.DataFrame()
-                        
-                    tech_summary = ai_script.calculate_technical_indicators(hist)
-                    
-                    try:
-                        news_data = ticker.news
-                        news_titles = [item['title'] for item in news_data[:3]] if news_data else ["今日無相關重大新聞..."]
-                    except Exception:
-                        news_titles = ["新聞爬取失敗"]
-                        
-                    # 顯示技術面與新聞摘要
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.markdown("**📌 今日技術面觀測：**")
-                        st.code(tech_summary)
-                    with c2:
-                        st.markdown("**📰 市場最新重點新聞：**")
-                        for idx, title in enumerate(news_titles, 1):
-                            st.caption(f"{idx}. {title}")
-                            
-                    # 呼叫外部 AI 產生報告
-                    report = ai_script.call_ai_for_analysis(f"{code} {name}", tech_summary, news_titles)
-                    
-                    st.markdown("### 🤖 操作建議與解讀")
-                    if report.startswith("⚠️") or report.startswith("❌"):
-                        st.error(report)
-                    else:
-                        st.success(report)
-                
+                # 直接呼叫腳本的 main 函數來統一產出並存檔
+                ai_script.main()
                 st.balloons()
                 st.success("✅ 今日所有持股的 AI 分析報告已產生完成！")
+                st.rerun()
 
+# ═══════════════════════════════════════════════════════════════════════
+# Part 5：總資產管理
+# ═══════════════════════════════════════════════════════════════════════
+with tab5:
+    st.header("💰 總資產與負債管理")
+    st.info("💡 在這裡您可以記錄所有的閒置現金、實體資產與貸款，系統將自動加上「您的即時股票市值」，幫您動態統整出真實的淨資產！")
+    
+    assets = load_assets()
+    
+    if "cash" not in assets: assets["cash"] = []
+    if "other_assets" not in assets: assets["other_assets"] = []
+    if "liabilities" not in assets: assets["liabilities"] = []
+    
+    # 計算股票庫存總現值
+    portfolio = load_portfolio()
+    active_stocks = [s for s in portfolio if s.get('status', 'active') == 'active']
+    stock_total_value = 0.0
+    
+    if active_stocks:
+        jyf_codes = tuple(set(str(s['code']) for s in active_stocks))
+        jyf_prices = fetch_prices_batch(jyf_codes)
+        for s in active_stocks:
+            code = str(s['code'])
+            qty = s.get('qty', 0)
+            live_p = jyf_prices.get(code)
+            if live_p is not None:
+                stock_total_value += float(live_p) * float(qty)
+            else:
+                stock_total_value += float(s.get('buy_price', 0)) * float(qty)
+                
+    st.markdown("### 📝 輸入與編輯區 (可雙擊儲存格直接編輯，下方會自動新增空列)")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🏦 1. 閒置現金與帳戶餘額")
+        df_cash = pd.DataFrame(assets["cash"] if assets["cash"] else [{"帳戶名稱": "元富證券", "金額": 91496}, {"帳戶名稱": "玉山證券", "金額": 6000}])
+        edited_cash = st.data_editor(df_cash, num_rows="dynamic", key="editor_cash", use_container_width=True)
+        
+        st.subheader("🚗 2. 其他資產 (房屋、車輛等)")
+        df_other = pd.DataFrame(assets["other_assets"] if assets["other_assets"] else [{"資產名稱": "Mazda CX-3", "金額": 440000}])
+        edited_other = st.data_editor(df_other, num_rows="dynamic", key="editor_other", use_container_width=True)
+
+    with col2:
+        st.subheader("📉 3. 負債 (貸款等)")
+        df_liabilities = pd.DataFrame(assets["liabilities"] if assets["liabilities"] else [{"負債名稱": "信用貸款餘額", "金額": 889978}])
+        edited_liabilities = st.data_editor(df_liabilities, num_rows="dynamic", key="editor_liab", use_container_width=True)
+
+    c_save1, c_save2 = st.columns([1, 4])
+    with c_save1:
+        if st.button("💾 點我儲存上方報表", type="primary"):
+            assets["cash"] = edited_cash.dropna(how='all').to_dict('records')
+            assets["other_assets"] = edited_other.dropna(how='all').to_dict('records')
+            assets["liabilities"] = edited_liabilities.dropna(how='all').to_dict('records')
+            save_assets(assets)
+            st.success("✅ 資產資料已成功儲存！")
+            
+    st.divider()
+    
+    # 安全的動態加總計算
+    try:
+        total_cash = pd.to_numeric(edited_cash.get("金額", pd.Series([0])), errors='coerce').sum()
+    except Exception: total_cash = 0
+    
+    try:
+        total_other = pd.to_numeric(edited_other.get("金額", pd.Series([0])), errors='coerce').sum()
+    except Exception: total_other = 0
+    
+    try:
+        total_liab = pd.to_numeric(edited_liabilities.get("金額", pd.Series([0])), errors='coerce').sum()
+    except Exception: total_liab = 0
+    
+    total_assets = total_cash + total_other + stock_total_value
+    net_worth = total_assets - total_liab
+    
+    st.header("📈 真實財富健康度 (動態結算)")
+    st.markdown(f"**您的股票庫存即時總市值：** `NT$ {stock_total_value:,.0f}`")
+    
+    c_m1, c_m2, c_m3 = st.columns(3)
+    c_m1.metric("💰 總資產 (股票+現金+其他)", f"NT$ {total_assets:,.0f}")
+    c_m2.metric("📉 總負債 (扣除項)", f"NT$ {-total_liab:,.0f}")
+    c_m3.metric("🏆 真實淨資產 (Net Worth)", f"NT$ {net_worth:,.0f}", delta="財務自由度更新")
+    
+    st.divider()
+    
+    # 畫出淨資產成長曲線
+    st.subheader("📈 淨資產成長軌跡")
+    if os.path.exists(NET_WORTH_HISTORY_FILE):
+        try:
+            with open(NET_WORTH_HISTORY_FILE, "r", encoding="utf-8") as f:
+                history_data = json.load(f)
+            
+            if len(history_data) > 0:
+                df_hist = pd.DataFrame(history_data)
+                df_hist['date'] = pd.to_datetime(df_hist['date'])
+                df_hist = df_hist.sort_values('date')
+                
+                # Plotly is great but st.line_chart is simpler and built-in natively
+                # Let's chart Net Worth and Total Assets
+                chart_data = df_hist.set_index('date')[['net_worth', 'total_assets']]
+                chart_data.columns = ['真實淨資產 (Net Worth)', '總資產 (Total Assets)']
+                
+                st.line_chart(chart_data, use_container_width=True)
+            else:
+                st.info("🕒 從明天開始，這裡會顯示您的每日資產成長軌跡圖表！")
+        except Exception as e:
+            st.error(f"無法讀取歷史資料: {str(e)}")
+    else:
+        st.info("🕒 系統尚未產生第一次歷史紀錄。每天下午 AI 排程執行時會自動幫您結算並記錄！")

@@ -191,5 +191,51 @@ def main():
     record_daily_net_worth()
     print("✅ 今日淨資產歷史軌跡已結算並紀錄完成！")
 
+def call_ai_with_live_search(stock_code, stock_name):
+    """
+    讓 Gemini 開啟 Google Search grounding，自行搜尋並抓取最新資訊分析。
+    不依賴 yfinance，由 AI 主動獲取即時新聞、法說會、籌碼等。
+    """
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return "⚠️ 尚未設定 GEMINI_API_KEY，請在 .env 填入金鑰。"
+
+    prompt = f"""請扮演一位專業的台股分析師，現在立刻透過 Google 搜尋，
+查詢台股 {stock_code} {stock_name} 的最新即時資訊，包含：
+1. 今日或近期股價走勢與重要技術訊號
+2. 最新財報、法說會或重大公告
+3. 近期相關新聞與市場情緒
+4. 外資、投信、自營商最新籌碼動向（如有）
+
+請根據你搜尋到的最新資料，給我一份針對 {stock_code} {stock_name} 的簡短綜合操作建議。"""
+
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                tools=[types.Tool(google_search=types.GoogleSearch())]
+            )
+        )
+        from utils.helpers import increment_gemini_call
+        increment_gemini_call()
+
+        # grounding 模式下 response.text 可能為 None，從 candidates 取文字
+        text = response.text
+        if text is None:
+            try:
+                text = response.candidates[0].content.parts[0].text
+            except Exception:
+                text = "（Gemini 未回傳文字內容，可能被安全過濾器擋住）"
+
+        return text.replace('\n\n', '\n').strip()
+    except Exception as e:
+        return f"❌ Gemini 即時搜尋發生錯誤：{str(e)}"
+
+
 if __name__ == "__main__":
     main()
