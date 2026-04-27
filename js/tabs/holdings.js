@@ -50,6 +50,7 @@ async function renderHoldings(root, rows) {
     ${renderStats(enriched.length, totalCost, totalVal, totalPnl, totalPnlPct)}
     ${renderTable(enriched)}
     ${renderSellModal()}
+    ${renderEditModal()}
   `;
 
   bindAddForm(root, rows, enriched);
@@ -154,6 +155,7 @@ function renderTable(rows) {
         <td class="right ${colorClass(r.pnlPct)}">${r.pnlPct != null ? fmtPct(r.pnlPct) : '—'}</td>
         <td>
           <button class="btn-sm secondary sell-btn" data-id="${r.id}">賣出</button>
+          <button class="btn-sm secondary edit-btn" data-id="${r.id}">編輯</button>
           <button class="btn-sm secondary btn-danger del-btn" data-id="${r.id}">刪除</button>
         </td>
       </tr>`;
@@ -210,6 +212,44 @@ function renderSellModal() {
           <footer>
             <button id="sell-submit-btn" type="submit">確認賣出</button>
             <button type="button" class="secondary" id="sell-cancel-btn">取消</button>
+          </footer>
+        </form>
+      </article>
+    </dialog>
+  `;
+}
+
+// ── Edit modal ────────────────────────────────────────────────────────
+
+function renderEditModal() {
+  return `
+    <dialog id="edit-modal">
+      <article>
+        <header>
+          <button class="close" aria-label="Close" id="edit-modal-close"></button>
+          <h3>編輯持股</h3>
+        </header>
+        <form id="edit-form" onsubmit="return false">
+          <input type="hidden" id="edit-id" />
+          <div class="form-grid">
+            <label>股票代號 <input id="edit-symbol" type="text" disabled /></label>
+            <label>名稱 <input id="edit-name" type="text" /></label>
+            <label>買入日期 * <input id="edit-buy-date" type="date" required /></label>
+            <label>成本價格 * <input id="edit-avg-cost" type="number" min="0" step="0.01" required /></label>
+            <label>股數 * <input id="edit-shares" type="number" min="1" step="1" required /></label>
+            <label>策略
+              <select id="edit-strategy">
+                <option value="manual">手動</option>
+                <option value="jyf60">金玉峰60天</option>
+                <option value="long">長期持有</option>
+                <option value="swing">波段</option>
+              </select>
+            </label>
+            <label style="grid-column:1/-1">備註 <input id="edit-notes" type="text" /></label>
+          </div>
+          <footer>
+            <button id="edit-submit-btn" type="submit">儲存修改</button>
+            <button type="button" class="secondary" id="edit-cancel-btn">取消</button>
           </footer>
         </form>
       </article>
@@ -370,6 +410,58 @@ function bindTableActions(root, rows) {
       .catch(e => {
         window.showToast('賣出失敗：' + e.message, 'error');
         initHoldings(root); // 全部重載回復原樣
+      });
+  });
+
+  // Edit modal
+  const editModal = root.querySelector('#edit-modal');
+  root.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const row = rows.find(r => r.id === id);
+      if (!row) return;
+      root.querySelector('#edit-id').value = id;
+      root.querySelector('#edit-symbol').value = row.symbol;
+      root.querySelector('#edit-name').value = row.name || '';
+      // 確保 datetime 格式擷取開頭的 yyyy-mm-dd
+      root.querySelector('#edit-buy-date').value = row.buy_date ? String(row.buy_date).slice(0, 10) : '';
+      root.querySelector('#edit-avg-cost').value = row.avg_cost || '';
+      root.querySelector('#edit-shares').value = row.shares || '';
+      root.querySelector('#edit-strategy').value = row.strategy || 'manual';
+      root.querySelector('#edit-notes').value = row.notes || '';
+      editModal.showModal();
+    });
+  });
+
+  root.querySelector('#edit-modal-close')?.addEventListener('click', () => editModal.close());
+  root.querySelector('#edit-cancel-btn')?.addEventListener('click', () => editModal.close());
+
+  root.querySelector('#edit-form')?.addEventListener('submit', () => {
+    const editId = root.querySelector('#edit-id').value;
+    const patch = {
+      name: root.querySelector('#edit-name').value.trim(),
+      buy_date: root.querySelector('#edit-buy-date').value,
+      avg_cost: parseFloat(root.querySelector('#edit-avg-cost').value),
+      shares: parseInt(root.querySelector('#edit-shares').value),
+      strategy: root.querySelector('#edit-strategy').value,
+      notes: root.querySelector('#edit-notes').value.trim()
+    };
+    
+    editModal.close();
+
+    // [毫秒級優化] 樂觀更新 UI (Optimistic UI)
+    const targetRow = rows.find(r => r.id === editId);
+    if (targetRow) {
+      Object.assign(targetRow, patch);
+      renderHoldings(root, rows);
+    }
+
+    // 發送更新 API
+    api.update(editId, patch)
+      .then(() => window.showToast('修改已儲存', 'success'))
+      .catch(e => {
+        window.showToast('修改失敗：' + e.message, 'error');
+        initHoldings(root);
       });
   });
 }
