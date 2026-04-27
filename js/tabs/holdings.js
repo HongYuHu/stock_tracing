@@ -247,27 +247,45 @@ function bindAddForm(root, existingRows, enriched) {
     }, 600);
   });
 
-  root.querySelector('#add-holding-form').addEventListener('submit', async () => {
+  root.querySelector('#add-holding-form').addEventListener('submit', () => {
     btn.disabled = true;
     btn.textContent = '新增中…';
     statusEl.textContent = '';
-    try {
-      await api.create({
-        symbol: symbolInput.value.trim().toUpperCase(),
-        name: nameInput.value.trim(),
-        buy_date: root.querySelector('#f-buy-date').value,
-        avg_cost: parseFloat(root.querySelector('#f-avg-cost').value),
-        shares: parseInt(root.querySelector('#f-shares').value),
-        strategy: root.querySelector('#f-strategy').value,
-        notes: root.querySelector('#f-notes').value.trim()
-      });
+    
+    // 建立新資料物件 (暫存 ID)
+    const newObj = {
+      id: Date.now().toString(),
+      symbol: symbolInput.value.trim().toUpperCase(),
+      name: nameInput.value.trim(),
+      buy_date: root.querySelector('#f-buy-date').value,
+      avg_cost: parseFloat(root.querySelector('#f-avg-cost').value),
+      shares: parseInt(root.querySelector('#f-shares').value),
+      strategy: root.querySelector('#f-strategy').value,
+      notes: root.querySelector('#f-notes').value.trim()
+    };
+
+    // [毫秒級優化] 樂觀更新 UI (Optimistic UI)
+    existingRows.unshift(newObj);
+    renderHoldings(root, existingRows);
+    window.showToast('處理中...', 'info');
+
+    // 背景發送 API
+    api.create(newObj).then(async () => {
       window.showToast('持股已新增', 'success');
-      await initHoldings(root);
-    } catch (e) {
+      // 背景重新同步真實 ID 不刷進 Loading 骨架
+      try {
+        const freshData = await api.list();
+        existingRows.length = 0;
+        existingRows.push(...freshData);
+        renderHoldings(root, existingRows);
+      } catch(e) {}
+    }).catch(e => {
       window.showToast('新增失敗：' + e.message, 'error');
-      btn.disabled = false;
-      btn.textContent = '新增';
-    }
+      // 發生錯誤，回滾本地更新
+      const index = existingRows.findIndex(r => r.id === newObj.id);
+      if (index !== -1) existingRows.splice(index, 1);
+      renderHoldings(root, existingRows);
+    });
   });
 }
 
@@ -276,17 +294,24 @@ function bindTableActions(root, rows) {
 
   // Delete
   root.querySelectorAll('.del-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', () => {
       const id = btn.dataset.id;
       const row = rows.find(r => r.id === id);
       if (!confirm(`確定刪除 ${row?.name || row?.symbol}？`)) return;
-      try {
-        await api.delete(id);
+      
+      // [毫秒級優化] 樂觀更新 UI (Optimistic UI)
+      const idx = rows.findIndex(r => r.id === id);
+      if (idx !== -1) rows.splice(idx, 1);
+      renderHoldings(root, rows);
+
+      // 背景發送 API
+      api.delete(id).then(() => {
         window.showToast('已刪除', 'success');
-        await initHoldings(root);
-      } catch (e) {
+      }).catch(e => {
         window.showToast('刪除失敗：' + e.message, 'error');
-      }
+        // 發生錯誤，重載回來
+        initHoldings(root); 
+      });
     });
   });
 
@@ -309,26 +334,40 @@ function bindTableActions(root, rows) {
   root.querySelector('#sell-modal-close')?.addEventListener('click', () => modal.close());
   root.querySelector('#sell-cancel-btn')?.addEventListener('click', () => modal.close());
 
-  root.querySelector('#sell-form')?.addEventListener('submit', async () => {
+  root.querySelector('#sell-form')?.addEventListener('submit', () => {
     const submitBtn = root.querySelector('#sell-submit-btn');
     submitBtn.disabled = true;
     submitBtn.textContent = '處理中…';
-    try {
-      await api.sell(
-        root.querySelector('#sell-id').value,
-        parseInt(root.querySelector('#sell-shares').value),
-        parseFloat(root.querySelector('#sell-price').value),
-        root.querySelector('#sell-date').value,
-        root.querySelector('#sell-notes').value
-      );
-      modal.close();
-      window.showToast('賣出成功，已記錄損益', 'success');
-      await initHoldings(root);
-    } catch (e) {
-      window.showToast('賣出失敗：' + e.message, 'error');
-      submitBtn.disabled = false;
-      submitBtn.textContent = '確認賣出';
+    
+    // 取得資料
+    const sellId = root.querySelector('#sell-id').value;
+    const sellShares = parseInt(root.querySelector('#sell-shares').value);
+    const sellPrice = parseFloat(root.querySelector('#sell-price').value);
+    const sellDate = root.querySelector('#sell-date').value;
+    const sellNotes = root.querySelector('#sell-notes').value;
+    
+    modal.close();
+
+    // [毫秒級優化] 樂觀更新 UI (Optimistic UI)
+    const targetRow = rows.find(r => r.id === sellId);
+    if (targetRow) {
+      targetRow.shares -= sellShares;
+      if (targetRow.shares <= 0) {
+        const idx = rows.findIndex(r => r.id === sellId);
+        if (idx !== -1) rows.splice(idx, 1);
+      }
+      renderHoldings(root, rows);
     }
+
+    // 發送 API
+    api.sell(sellId, sellShares, sellPrice, sellDate, sellNotes)
+      .then(() => {
+        window.showToast('賣出成功，已記錄損益', 'success');
+      })
+      .catch(e => {
+        window.showToast('賣出失敗：' + e.message, 'error');
+        initHoldings(root); // 全部重載回復原樣
+      });
   });
 }
 
