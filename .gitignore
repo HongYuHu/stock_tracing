@@ -12,3 +12,7 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Write token must NEVER be committed (user enters it in app settings)
+# js/config.js only stores READ_TOKEN (safe to commit)
+# WRITE_TOKEN lives only in localStorage
