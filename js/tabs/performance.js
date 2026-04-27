@@ -81,29 +81,59 @@ function drawNetworthChart(history) {
       datasets: [{
         label: '總淨值 (TWD)',
         data: values,
-        borderColor: '#1a73e8',
-        backgroundColor: 'rgba(26,115,232,0.08)',
+        borderColor: '#4f8ef7',
+        backgroundColor: (ctx) => {
+          const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, ctx.chart.height);
+          gradient.addColorStop(0, 'rgba(79,142,247,0.22)');
+          gradient.addColorStop(0.6, 'rgba(79,142,247,0.06)');
+          gradient.addColorStop(1, 'rgba(79,142,247,0.0)');
+          return gradient;
+        },
         borderWidth: 2,
         fill: true,
-        tension: 0.3,
-        pointRadius: values.length > 60 ? 0 : 3
+        tension: 0.4,
+        pointRadius: values.length > 60 ? 0 : 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#4f8ef7',
+        pointBorderColor: '#0a0c0f',
+        pointBorderWidth: 2,
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
+          backgroundColor: 'rgba(26,29,36,0.97)',
+          borderColor: 'rgba(255,255,255,0.10)',
+          borderWidth: 1,
+          titleColor: '#9aa0ac',
+          bodyColor: '#e8eaed',
+          titleFont: { size: 11, weight: '600', family: 'Inter, system-ui' },
+          bodyFont: { size: 13, weight: '700', family: 'Inter, system-ui' },
+          padding: 12,
+          cornerRadius: 8,
           callbacks: {
-            label: ctx => ' ' + fmtTwd(ctx.parsed.y)
+            label: ctx => '  ' + fmtTwd(ctx.parsed.y)
           }
         }
       },
       scales: {
-        x: { grid: { display: false } },
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+          ticks: { color: '#5f6470', font: { size: 11, family: 'Inter, system-ui' } },
+          border: { display: false }
+        },
         y: {
-          ticks: { callback: v => fmtTwd(v) }
+          grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+          ticks: {
+            color: '#5f6470',
+            font: { size: 11, family: 'Inter, system-ui' },
+            callback: v => fmtTwd(v)
+          },
+          border: { display: false }
         }
       }
     }

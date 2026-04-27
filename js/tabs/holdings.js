@@ -11,7 +11,7 @@ import { isConfigured, canWrite } from '../config.js';
 export async function initHoldings(root) {
   root.innerHTML = renderSkeleton();
   if (!isConfigured()) {
-    root.innerHTML = `<p class="muted" style="padding:2rem">請先在 ⚙️ 設定中填入 GAS URL 和 Read Token。</p>`;
+    root.innerHTML = `<p class="muted" style="padding:2rem">請先在 設定 中填入 GAS URL 和 Read Token。</p>`;
     return;
   }
 
@@ -92,7 +92,7 @@ function renderAddForm() {
   }
   return `
     <details class="add-form" id="add-form-details">
-      <summary>➕ 新增持股</summary>
+      <summary>＋ 新增持股</summary>
       <form id="add-holding-form" onsubmit="return false">
         <div class="form-grid">
           <label>
@@ -194,7 +194,7 @@ function renderSellModal() {
       <article>
         <header>
           <button class="close" aria-label="Close" id="sell-modal-close"></button>
-          <h3>💰 賣出持股</h3>
+          <h3>賣出持股</h3>
         </header>
         <form id="sell-form" onsubmit="return false">
           <input type="hidden" id="sell-id" />

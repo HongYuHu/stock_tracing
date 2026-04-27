@@ -1,10 +1,15 @@
 <!DOCTYPE html>
-<html lang="zh-TW" data-theme="light">
+<html lang="zh-TW" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="個人股票追蹤系統 — 跨裝置持股管理" />
   <title>📈 股票追蹤系統</title>
+
+  <!-- Google Fonts: Inter + Noto Sans TC + JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
   <!-- Pico CSS (semantic, mobile-first, no build needed) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
@@ -20,7 +25,7 @@
 
   <!-- PWA -->
   <link rel="manifest" href="manifest.webmanifest" />
-  <meta name="theme-color" content="#1a73e8" />
+  <meta name="theme-color" content="#0a0c0f" />
 </head>
 <body>
 
@@ -28,11 +33,10 @@
 <header class="app-header">
   <div class="container-fluid">
     <div class="app-header-inner">
-      <span class="app-logo">📈 股票追蹤系統</span>
+      <span class="app-logo"><span>股票追蹤系統</span></span>
       <div class="header-actions">
         <span id="market-status" class="market-badge"></span>
-        <button class="icon-btn" onclick="toggleTheme()" title="切換主題">🌙</button>
-        <button class="icon-btn" id="settings-btn" onclick="openSettings()" title="設定">⚙️</button>
+        <button class="icon-btn" id="settings-btn" onclick="openSettings()" title="設定">⚙</button>
       </div>
     </div>
   </div>
@@ -41,10 +45,10 @@
 <!-- ── Tab navigation ───────────────────────────────────────────────── -->
 <nav class="tab-nav container-fluid">
   <ul>
-    <li><a href="#" class="tab-link active" data-tab="holdings" onclick="switchTab('holdings', this)">📁 我的持股</a></li>
-    <li><a href="#" class="tab-link" data-tab="networth" onclick="switchTab('networth', this)">💰 總資產</a></li>
-    <li><a href="#" class="tab-link" data-tab="performance" onclick="switchTab('performance', this)">📊 績效圖表</a></li>
-    <li><a href="#" class="tab-link" data-tab="ai" onclick="switchTab('ai', this)">🤖 AI 分析</a></li>
+    <li><a href="#" class="tab-link active" data-tab="holdings" onclick="switchTab('holdings', this)"><span class="tab-icon">◈</span> 我的持股</a></li>
+    <li><a href="#" class="tab-link" data-tab="networth" onclick="switchTab('networth', this)"><span class="tab-icon">◎</span> 總資產</a></li>
+    <li><a href="#" class="tab-link" data-tab="performance" onclick="switchTab('performance', this)"><span class="tab-icon">↗</span> 績效圖表</a></li>
+    <li><a href="#" class="tab-link" data-tab="ai" onclick="switchTab('ai', this)"><span class="tab-icon">◉</span> AI 分析</a></li>
   </ul>
 </nav>
 
@@ -77,8 +81,8 @@
 <dialog id="settings-modal">
   <article>
     <header>
-      <button class="close" aria-label="Close" onclick="closeSettings()"></button>
-      <h3>⚙️ 設定</h3>
+      <button class="close" aria-label="Close" onclick="closeSettings()">✕</button>
+      <h3>設定</h3>
     </header>
     <form onsubmit="saveSettings(event)">
       <label>
@@ -140,12 +144,6 @@
     }
   };
 
-  // ── Theme toggle ──────────────────────────────────────────────────
-  window.toggleTheme = function() {
-    const html = document.documentElement;
-    const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    html.setAttribute('data-theme', next);
-    localStorage.setItem('theme', next);
   };
 
   // ── Settings modal ────────────────────────────────────────────────
@@ -175,6 +173,10 @@
     switchTab('holdings', document.querySelector('[data-tab="holdings"]'));
   };
 
+  // ── Chart.js Global ───────────────────────────────────────────────
+  Chart.defaults.font.family = "'Inter', 'Noto Sans TC', system-ui, sans-serif";
+  Chart.defaults.color = "#5f6470";
+
   // ── Toast ────────────────────────────────────────────────────────
   window.showToast = function(msg, type = 'info') {
     const t = document.getElementById('toast');
@@ -202,10 +204,6 @@
 
   // ── Init ──────────────────────────────────────────────────────────
   function boot() {
-    // Restore theme
-    const theme = localStorage.getItem('theme') || 'light';
-    document.documentElement.setAttribute('data-theme', theme);
-
     // Load config
     loadConfig();
 
@@ -220,7 +218,7 @@
     // Prompt settings if not configured
     const cfg = getConfig();
     if (!cfg.gasUrl) {
-      showToast('請先在 ⚙️ 設定中填入 GAS URL', 'warn');
+      showToast('請先在 設定 中填入 GAS URL', 'warn');
     }
   }
 

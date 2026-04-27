@@ -72,7 +72,7 @@ function renderNetWorth(root, history, assetsData) {
 function renderSnapshotForm() {
   return `
     <details class="add-form">
-      <summary>📸 記錄今日淨值快照</summary>
+      <summary>記錄今日淨值快照</summary>
       <form id="snapshot-form" onsubmit="return false">
         <div class="form-grid">
           <label>日期 <input id="snap-date" type="date" value="${new Date().toISOString().slice(0,10)}" required /></label>
@@ -95,7 +95,7 @@ function renderAssetsTable(assetsList, liabList, totalLiab) {
       <td>${a.category || ''}</td>
       <td class="right">${fmtTwd(a.value)}</td>
       <td>${a.currency || 'TWD'}</td>
-      ${canWrite() ? `<td><button class="btn-sm secondary del-asset-btn" data-id="${a.id}" data-type="asset">刪除</button></td>` : '<td></td>'}
+      ${canWrite() ? `<td><button class="btn-sm secondary btn-danger del-asset-btn" data-id="${a.id}" data-type="asset">刪除</button></td>` : '<td></td>'}
     </tr>`).join('');
 
   const liabRows = liabList.map(l => `
@@ -104,12 +104,12 @@ function renderAssetsTable(assetsList, liabList, totalLiab) {
       <td>負債</td>
       <td class="right loss">${fmtTwd(l.amount)}</td>
       <td>${l.currency || 'TWD'}</td>
-      ${canWrite() ? `<td><button class="btn-sm secondary del-asset-btn" data-id="${l.id}" data-type="liability">刪除</button></td>` : '<td></td>'}
+      ${canWrite() ? `<td><button class="btn-sm secondary btn-danger del-asset-btn" data-id="${l.id}" data-type="liability">刪除</button></td>` : '<td></td>'}
     </tr>`).join('');
 
   const addAssetForm = canWrite() ? `
     <details class="add-form" style="margin-top:.5rem">
-      <summary>➕ 新增資產/負債</summary>
+      <summary>＋ 新增資產/負債</summary>
       <form id="add-asset-form" onsubmit="return false">
         <div class="form-grid">
           <label>名稱 * <input id="asset-name" type="text" required /></label>
