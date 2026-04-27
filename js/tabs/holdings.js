@@ -270,7 +270,10 @@ function bindAddForm(root, existingRows, enriched) {
     window.showToast('處理中...', 'info');
 
     // 背景發送 API
-    api.create(newObj).then(async () => {
+    // 為了防止 Google Sheets 自動將 "00935" 轉換成數字 935，我們在寫入時強制在前面加上單引號
+    const payload = { ...newObj, symbol: "'" + newObj.symbol };
+    
+    api.create(payload).then(async () => {
       window.showToast('持股已新增', 'success');
       // 背景重新同步真實 ID 不刷進 Loading 骨架
       try {
