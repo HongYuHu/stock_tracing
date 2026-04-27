@@ -29,36 +29,36 @@
 </head>
 <body>
 
-<!-- ── Top navigation ───────────────────────────────────────────────── -->
-<header class="app-header">
-  <div class="container-fluid">
-    <div class="app-header-inner">
+<div class="app-layout">
+  <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
       <span class="app-logo"><span>股票追蹤系統</span></span>
+    </div>
+    <nav class="sidebar-nav">
+      <ul>
+        <li><a href="#" class="tab-link active" data-tab="holdings" onclick="switchTab('holdings', this)"><span class="tab-icon">💼</span> 我的持股</a></li>
+        <li><a href="#" class="tab-link" data-tab="networth" onclick="switchTab('networth', this)"><span class="tab-icon">💰</span> 總資產</a></li>
+        <li><a href="#" class="tab-link" data-tab="performance" onclick="switchTab('performance', this)"><span class="tab-icon">📈</span> 績效圖表</a></li>
+        <li><a href="#" class="tab-link" data-tab="ai" onclick="switchTab('ai', this)"><span class="tab-icon">✨</span> AI 分析</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <!-- ── Main Content Area ────────────────────────────────────────────── -->
+  <div class="main-wrapper">
+    <header class="top-header">
       <div class="header-actions">
         <span id="market-status" class="market-badge"></span>
         <button class="icon-btn" id="settings-btn" onclick="openSettings()" title="設定">⚙</button>
       </div>
-    </div>
-  </div>
-</header>
+    </header>
 
-<!-- ── Tab navigation ───────────────────────────────────────────────── -->
-<nav class="tab-nav container-fluid">
-  <ul>
-    <li><a href="#" class="tab-link active" data-tab="holdings" onclick="switchTab('holdings', this)"><span class="tab-icon">◈</span> 我的持股</a></li>
-    <li><a href="#" class="tab-link" data-tab="networth" onclick="switchTab('networth', this)"><span class="tab-icon">◎</span> 總資產</a></li>
-    <li><a href="#" class="tab-link" data-tab="performance" onclick="switchTab('performance', this)"><span class="tab-icon">↗</span> 績效圖表</a></li>
-    <li><a href="#" class="tab-link" data-tab="ai" onclick="switchTab('ai', this)"><span class="tab-icon">◉</span> AI 分析</a></li>
-  </ul>
-</nav>
-
-<!-- ── Main content ─────────────────────────────────────────────────── -->
-<main class="container-fluid" id="main-content">
-
-  <!-- HOLDINGS TAB -->
-  <section id="tab-holdings" class="tab-content active">
-    <div id="holdings-root"></div>
-  </section>
+    <main class="content-area" id="main-content">
+      <!-- HOLDINGS TAB -->
+      <section id="tab-holdings" class="tab-content active">
+        <div id="holdings-root"></div>
+      </section>
 
   <!-- NET WORTH TAB -->
   <section id="tab-networth" class="tab-content">
@@ -75,7 +75,9 @@
     <div id="ai-root"></div>
   </section>
 
-</main>
+    </main>
+  </div>
+</div>
 
 <!-- ── Settings modal ───────────────────────────────────────────────── -->
 <dialog id="settings-modal">

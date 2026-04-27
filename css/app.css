@@ -6,35 +6,35 @@
 /* ── 1. Design Tokens ────────────────────────────────────────────────── */
 :root {
   /* Background layers */
-  --bg-base:     #0a0c0f;
-  --bg-surface:  #111318;
-  --bg-elevated: #1a1d24;
-  --bg-overlay:  #222630;
-  --bg-subtle:   #2a2f3a;
+  --bg-base:     #111111;         /* Image 2 pure dark */
+  --bg-surface:  #1c1f2a;         /* Dashboard panels */
+  --bg-elevated: #242934;
+  --bg-overlay:  #2f3542;
+  --bg-subtle:   #3b4252;
 
   /* Borders */
-  --border-subtle:  rgba(255,255,255,0.06);
+  --border-subtle:  rgba(255,255,255,0.05);
   --border-default: rgba(255,255,255,0.10);
   --border-strong:  rgba(255,255,255,0.18);
 
   /* Text */
-  --text-primary:   #e8eaed;
-  --text-secondary: #9aa0ac;
-  --text-muted:     #5f6470;
+  --text-primary:   #ffffff;
+  --text-secondary: #a9b1c2;
+  --text-muted:     #6e7687;
 
   /* Brand accent */
-  --accent:        #4f8ef7;
-  --accent-glow:   rgba(79,142,247,0.20);
-  --accent-subtle: rgba(79,142,247,0.10);
+  --accent:        #2d73ff;       /* Blue from Image 1 */
+  --accent-glow:   rgba(45,115,255,0.25);
+  --accent-subtle: rgba(45,115,255,0.15);
 
   /* Financial semantic colors */
-  --gain:        #34d17a;
-  --gain-bg:     rgba(52,209,122,0.10);
-  --gain-border: rgba(52,209,122,0.25);
+  --gain:        #5ce68b;         /* Neon green from Image 2 */
+  --gain-bg:     rgba(92,230,139,0.10);
+  --gain-border: rgba(92,230,139,0.30);
 
-  --loss:        #ff5c5c;
-  --loss-bg:     rgba(255,92,92,0.10);
-  --loss-border: rgba(255,92,92,0.25);
+  --loss:        #ff4d4d;         /* Vivid red */
+  --loss-bg:     rgba(255,77,77,0.10);
+  --loss-border: rgba(255,77,77,0.25);
 
   --warn:        #f5a623;
   --warn-bg:     rgba(245,166,35,0.10);
@@ -128,10 +128,8 @@ body {
   font-size: 0.875rem;
   line-height: 1.6;
   min-height: 100vh;
-  padding-bottom: 3rem;
-  background-image:
-    radial-gradient(ellipse at 15% 0%, rgba(79,142,247,0.05) 0%, transparent 50%),
-    radial-gradient(ellipse at 85% 100%, rgba(52,209,122,0.03) 0%, transparent 50%);
+  margin: 0;
+  overflow: hidden; /* App layout takes 100vh */
 }
 
 /* Tabular numbers for all financial data */
@@ -140,40 +138,33 @@ body {
   font-feature-settings: "tnum";
 }
 
-/* ── 4. App Header — Glassmorphism ───────────────────────────────────── */
-.app-header {
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  background: rgba(10,12,15,0.88);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 0;
-  box-shadow: inset 0 -1px 0 var(--border-subtle);
-}
-
-.app-header .container-fluid { padding: 0; }
-
-.app-header-inner {
+/* ── Layout Framework ────────────────────────────────────────────────── */
+.app-layout {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  height: 56px;
-  padding: 0 var(--space-6);
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-base);
 }
 
-/* ── Logo ────────────────────────────────────────────────────────────── */
+.sidebar {
+  width: 250px;
+  background: #191c24; /* Sidebar dark color */
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-brand {
+  padding: var(--space-6) var(--space-5);
+}
+
 .app-logo {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 700;
-  letter-spacing: -0.03em;
   color: var(--text-primary);
   text-decoration: none;
   user-select: none;
@@ -182,25 +173,82 @@ body {
 .app-logo::before {
   content: '';
   display: inline-block;
-  width: 22px;
-  height: 22px;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--gain) 100%);
-  border-radius: 6px;
-  flex-shrink: 0;
-  clip-path: polygon(20% 65%, 50% 25%, 80% 65%, 66% 65%, 66% 82%, 34% 82%, 34% 65%);
+  width: 20px; height: 20px;
+  background: var(--accent);
+  border-radius: 4px;
+  mask: url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" fill="white"/></svg>') no-repeat center/contain;
+  -webkit-mask: url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" fill="white"/></svg>') no-repeat center/contain;
 }
 
-.app-logo span {
-  background: linear-gradient(90deg, var(--text-primary) 0%, #8ab4f8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+/* ── Sidebar Navigation ──────────────────────────────────────────────── */
+.sidebar-nav ul {
+  list-style: none;
+  padding: 0 var(--space-3);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tab-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px 16px;
+  text-decoration: none;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  transition: all var(--dur-fast) var(--ease-smooth);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.tab-link:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.03);
+}
+
+.tab-link.active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 4px 15px var(--accent-glow);
+}
+
+.tab-icon {
+  font-size: 1.1rem;
+  opacity: 0.7;
+}
+
+.tab-link.active .tab-icon {
+  opacity: 1;
+}
+
+/* ── Main Area ───────────────────────────────────────────────────────── */
+.main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-image:
+    radial-gradient(ellipse at 15% 0%, rgba(45,115,255,0.03) 0%, transparent 40%),
+    radial-gradient(ellipse at 85% 100%, rgba(92,230,139,0.02) 0%, transparent 40%);
+}
+
+.top-header {
+  height: 64px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 var(--space-6);
+  flex-shrink: 0;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
 /* ── 5. Market Badge ─────────────────────────────────────────────────── */
@@ -279,91 +327,14 @@ body {
   color: var(--text-primary);
 }
 
-/* ── 7. Tab Navigation ───────────────────────────────────────────────── */
-.tab-nav {
-  background: var(--bg-base);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  position: sticky;
-  top: 56px;
-  z-index: 100;
-}
-
-.tab-nav::-webkit-scrollbar { display: none; }
-
-.tab-nav.container-fluid { padding: 0; }
-
-.tab-nav ul {
-  display: flex;
-  gap: 0;
-  list-style: none;
-  padding: 0 var(--space-6);
-  margin: 0;
-  min-width: max-content;
-  max-width: 1400px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.tab-nav li { margin: 0; }
-
-.tab-link {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 var(--space-4);
-  height: 44px;
-  font-size: 0.825rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  text-decoration: none;
-  white-space: nowrap;
-  transition: color var(--dur-base) var(--ease-smooth);
-  border: none;
-  background: none;
-}
-
-.tab-icon {
-  font-size: 0.85rem;
-  opacity: 0.6;
-  transition: opacity var(--dur-base) var(--ease-smooth);
-}
-
-.tab-link::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: var(--space-3);
-  right: var(--space-3);
-  height: 2px;
-  background: var(--accent);
-  border-radius: var(--radius-full) var(--radius-full) 0 0;
-  transform: scaleX(0);
-  transform-origin: center;
-  transition: transform var(--dur-base) var(--ease-spring);
-  box-shadow: 0 0 8px var(--accent-glow);
-}
-
-.tab-link:hover { color: var(--text-primary); }
-.tab-link:hover .tab-icon { opacity: 1; }
-
-.tab-link.active {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.tab-link.active .tab-icon { opacity: 1; }
-.tab-link.active::after { transform: scaleX(1); }
+/* Removed old horizontal header */
 
 /* ── 8. Main Content ─────────────────────────────────────────────────── */
-.container-fluid#main-content {
-  max-width: 1400px;
+.content-area {
+  padding: 0 var(--space-6) var(--space-8);
+  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
-  padding: var(--space-6);
 }
 
 .tab-content {
@@ -420,72 +391,85 @@ body {
   transform: translateY(-1px);
 }
 
-/* ── 10. Stat Row ────────────────────────────────────────────────────── */
-.stat-row {
+/* ── 10. Top Stats Layout (Match target image) ───────────────────────── */
+.top-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-5);
+  margin-bottom: var(--space-8);
+  align-items: stretch;
 }
 
-/* ── 11. Card Typography ─────────────────────────────────────────────── */
-.card-title {
-  font-size: 0.68rem;
+.stat-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 140px; /* Big explicit cards */
+}
+
+.total-asset-card {
+  /* Match the blue gradient card for Total Assets */
+  background: linear-gradient(135deg, #1b273d 0%, #151a25 100%);
+  border: 1px solid rgba(45, 115, 255, 0.3);
+}
+
+.asset-title {
+  font-size: 0.95rem;
   font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: var(--space-2);
+  color: #fff;
+  opacity: 0.9;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  margin-bottom: var(--space-3);
+  letter-spacing: 0.05em;
 }
 
-.card-value {
-  font-size: 1.6rem;
-  font-weight: 700;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-  font-family: var(--font-display);
-}
-
-/* Hero variant — for the main net worth number */
-.card-value.hero {
+.asset-value {
   font-size: 2.2rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  background: linear-gradient(135deg, var(--text-primary) 60%, var(--accent));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
 }
 
-/* Delta badge */
-.card-delta {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: var(--space-2);
-  font-size: 0.72rem;
+.pnl-title {
+  font-size: 0.95rem;
   font-weight: 600;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-3);
+  letter-spacing: 0.05em;
 }
 
-.card-delta.gain {
-  color: var(--gain);
-  background: var(--gain-bg);
+.pnl-value {
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
-.card-delta.loss {
-  color: var(--loss);
-  background: var(--loss-bg);
+.pnl-pct {
+  font-size: 1.1rem;
+  font-weight: 600;
+  opacity: 0.9;
 }
 
-.card-delta.muted {
-  color: var(--text-muted);
-  background: rgba(255,255,255,0.04);
+/* Background for cards that are strictly positive or negative overall */
+.stat-card.is-gain {
+  border-color: var(--gain-border);
+  background: linear-gradient(135deg, rgba(92,230,139,0.08) 0%, rgba(92,230,139,0.01) 100%);
+}
+.stat-card.is-loss {
+  border-color: var(--loss-border);
+  background: linear-gradient(135deg, rgba(255,77,77,0.08) 0%, rgba(255,77,77,0.01) 100%);
 }
 
 /* ── 12. Section Headings ────────────────────────────────────────────── */

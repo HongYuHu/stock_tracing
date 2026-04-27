@@ -60,23 +60,25 @@ async function renderHoldings(root, rows) {
 // ── Stats row ─────────────────────────────────────────────────────────
 
 function renderStats(count, cost, val, pnl, pnlPct) {
+  const isGain = pnl >= 0;
+  const pnlClass = isGain ? 'gain' : 'loss';
+  const pnlBgClass = isGain ? 'is-gain' : 'is-loss';
+  const pnlSign = isGain ? '+' : '';
+
   return `
-    <div class="stat-row">
-      <div class="card">
-        <div class="card-title">持股數</div>
-        <div class="card-value">${count}</div>
+    <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: var(--space-4); margin-top: 0;">當前持股</h2>
+    <div class="top-stats-grid">
+      <div class="stat-card total-asset-card">
+        <div class="asset-title">總資產</div>
+        <div class="asset-value">${fmtTwd(val)}</div>
       </div>
-      <div class="card">
-        <div class="card-title">成本合計</div>
-        <div class="card-value">${fmtTwd(cost)}</div>
+      <div class="stat-card ${pnlBgClass}">
+        <div class="pnl-title">未實現損益</div>
+        <div class="pnl-value ${pnlClass}">${pnlSign}${fmtTwd(pnl)} <span class="pnl-pct">(${pnlSign}${fmtPct(pnlPct)})</span></div>
       </div>
-      <div class="card">
-        <div class="card-title">市值合計</div>
-        <div class="card-value">${fmtTwd(val)}</div>
-      </div>
-      <div class="card">
-        <div class="card-title">未實現損益</div>
-        <div class="card-value ${colorClass(pnl)}">${fmtTwd(pnl)} (${fmtPct(pnlPct)})</div>
+      <div class="stat-card">
+        <div class="pnl-title">總成本</div>
+        <div class="pnl-value" style="color:var(--text-primary);">${fmtTwd(cost)}</div>
       </div>
     </div>
   `;
