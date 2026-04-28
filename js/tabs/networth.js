@@ -35,13 +35,13 @@ function renderNetWorth(root, history, assetsData, holdingsData) {
   const filterCash = a => (a.category || '').includes('現金') || (a.category || '').includes('cash') || (a.name || '').includes('證券');
   const totalCash = (assetsData.assets || []).filter(filterCash).reduce((s, a) => s + Number(a.value || 0), 0);
 
-  // 計算即時持股市值
-  const activeHoldings = (holdingsData || []).filter(h => h.status === 'active');
+  // 計算即時持股市值（Holdings 表中所有列均為在手持股）
+  const activeHoldings = (holdingsData || []).filter(h => Number(h.shares) > 0);
   const symbols = activeHoldings.map(h => h.symbol);
-  
+
   // 背景抓取現價後重新渲染即時數字
   let liveStockValue = 0;
-  activeHoldings.forEach(h => { liveStockValue += (h.buy_price || 0) * (h.shares || 0); }); // initial fallback
+  activeHoldings.forEach(h => { liveStockValue += (h.avg_cost || 0) * (h.shares || 0); }); // initial fallback
   
   const change = (latest && prev)
     ? Number(latest.total) - Number(prev.total) : null;
@@ -85,7 +85,7 @@ function renderNetWorth(root, history, assetsData, holdingsData) {
     let realStockVal = 0;
     activeHoldings.forEach(h => {
       const p = priceMap.get(h.symbol);
-      const px = p ? p.price : (h.buy_price || 0);
+      const px = p ? p.price : (h.avg_cost || 0);
       realStockVal += px * (h.shares || 0);
     });
     const liveNetWorth = totalAssets + realStockVal - totalLiab;
