@@ -139,6 +139,11 @@
         <input type="password" id="cfg-write-token" placeholder="私密寫入 token（不存 git）" />
         <small>允許新增、修改、刪除資料</small>
       </label>
+      <label>
+        Gemini API Key
+        <input type="password" id="cfg-gemini-key" placeholder="AIza... （僅存於本機瀏覽器）" />
+        <small>用於 AI 分析手動觸發，不會上傳至伺服器</small>
+      </label>
       <footer>
         <button type="submit">儲存</button>
         <button type="button" class="secondary" onclick="closeSettings()">取消</button>
@@ -212,6 +217,7 @@
     document.getElementById('cfg-gas-url').value = cfg.gasUrl || '';
     document.getElementById('cfg-read-token').value = cfg.readToken || '';
     document.getElementById('cfg-write-token').value = cfg.writeToken || '';
+    document.getElementById('cfg-gemini-key').value = localStorage.getItem('gemini_api_key') || '';
     document.getElementById('settings-modal').showModal();
   };
 
@@ -226,6 +232,9 @@
       readToken: document.getElementById('cfg-read-token').value.trim(),
       writeToken: document.getElementById('cfg-write-token').value.trim()
     });
+    const geminiKey = document.getElementById('cfg-gemini-key').value.trim();
+    if (geminiKey) localStorage.setItem('gemini_api_key', geminiKey);
+    else localStorage.removeItem('gemini_api_key');
     closeSettings();
     showToast('設定已儲存', 'success');
     // Reinit active tab
