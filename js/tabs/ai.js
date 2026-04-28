@@ -26,8 +26,18 @@ function renderAI(root, reports) {
     root.innerHTML = `
       <div style="padding:2rem;text-align:center">
         <p class="muted">尚無 AI 分析報告。</p>
-        <p style="font-size:.875rem">AI 分析需透過 Google Apps Script 定時觸發 Gemini API 自動產生，<br>並儲存至 Google Sheets 的 <code>AIReports</code> 分頁。</p>
+        <p style="font-size:.875rem">AI 分析需透過 Google Apps Script 定時觸發 Gemini API 自動產生，<br>或點下方按鈕手動產生。</p>
+        <button id="btn-generate-ai" class="btn-primary" style="margin-top:1rem;padding:6px 16px;font-size:0.85rem;border:none;cursor:pointer;">✨ 手動產生今日分析</button>
       </div>`;
+    root.querySelector('#btn-generate-ai').addEventListener('click', async () => {
+      let apiKey = localStorage.getItem('gemini_api_key');
+      if (!apiKey) {
+        apiKey = prompt('請輸入您的 Gemini API Key (僅儲存於本機瀏覽器):');
+        if (!apiKey) return;
+        localStorage.setItem('gemini_api_key', apiKey);
+      }
+      await runManualGeneration(root, apiKey);
+    });
     return;
   }
 
@@ -148,7 +158,7 @@ async function runManualGeneration(root, apiKey) {
     const { fetchPrices } = await import('../api/prices.js');
     
     const allHoldings = await holdings.list();
-    const active = allHoldings.filter(h => h.status === 'active');
+    const active = allHoldings.filter(h => Number(h.shares) > 0);
     if (!active.length) {
       alert('無持倉中股票，無法分析');
       return;
@@ -163,7 +173,7 @@ async function runManualGeneration(root, apiKey) {
       
       const p = priceMap.get(h.symbol);
       const px = p ? p.price : '未知';
-      const cost = h.buy_price || 0;
+      const cost = h.avg_cost || 0;
       const profit = (px !== '未知' && cost) ? ((px - cost) / cost * 100).toFixed(2) + '%' : '未知';
 
       const prompt = `您是一位專業台股分析師。我的持股：${h.symbol} ${h.name}，目前現價為 ${px}，我的成本為 ${cost}，目前損益率 ${profit}。
