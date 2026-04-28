@@ -6,7 +6,7 @@
 const CONFIG_KEY = 'stock_tracker_config';
 
 let _config = {
-  gasUrl: 'https://script.google.com/macros/s/AKfycbxlezdHjp62m97RpoNKXCVUfk2pDPTGT9A2xc-iA_gisXk3sLdiKc5hahhMWMMp7B9c/exec',
+  gasUrl: '',
   readToken: '',
   writeToken: ''
 };

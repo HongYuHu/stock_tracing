@@ -18,10 +18,24 @@ function holdingsList() {
   const data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
   const headers = data[0];
-  return data.slice(1).map(row => rowToObj(headers, row)).filter(r => r.id);
+  return data.slice(1).map(row => {
+    const obj = rowToObj(headers, row);
+    // Strip leading apostrophe inserted to prevent Sheets auto-converting symbols to numbers
+    if (obj.symbol && String(obj.symbol).startsWith("'")) {
+      obj.symbol = String(obj.symbol).slice(1);
+    }
+    return obj;
+  }).filter(r => r.id);
 }
 
 function holdingsCreate(body) {
+  const symbol = String(body.symbol || '').replace(/^'+/, '').trim().toUpperCase();
+  if (!symbol) throw new Error('symbol is required');
+  const shares = Number(body.shares);
+  if (!shares || shares <= 0) throw new Error('shares must be > 0');
+  const avgCost = Number(body.avg_cost);
+  if (isNaN(avgCost) || avgCost < 0) throw new Error('avg_cost must be >= 0');
+
   const sheet = getHoldingsSheet();
   const now = new Date().toISOString();
   const id = Utilities.getUuid();
@@ -30,10 +44,10 @@ function holdingsCreate(body) {
 
   const row = [
     id,
-    String(body.symbol || '').trim().toUpperCase(),
+    "'" + symbol,  // apostrophe prevents Sheets from converting e.g. "00935" → 935
     body.name || '',
-    Number(body.shares) || 0,
-    Number(body.avg_cost) || 0,
+    shares,
+    avgCost,
     buyDate,
     expiryDate,
     body.strategy || 'manual',
@@ -42,13 +56,15 @@ function holdingsCreate(body) {
     now
   ];
   sheet.appendRow(row);
-  return rowToObj(HOLDINGS_HEADERS, row);
+  const obj = rowToObj(HOLDINGS_HEADERS, row);
+  obj.symbol = symbol; // return clean symbol without apostrophe
+  return obj;
 }
 
 function holdingsUpdate(body) {
   const sheet = getHoldingsSheet();
   const lock = LockService.getDocumentLock();
-  lock.waitLock(10000);
+  lock.waitLock(30000);
   try {
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
@@ -75,7 +91,7 @@ function holdingsUpdate(body) {
 function holdingsDelete(body) {
   const sheet = getHoldingsSheet();
   const lock = LockService.getDocumentLock();
-  lock.waitLock(10000);
+  lock.waitLock(30000);
   try {
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
@@ -97,7 +113,7 @@ function holdingsDelete(body) {
  */
 function holdingsSell(body) {
   const lock = LockService.getDocumentLock();
-  lock.waitLock(10000);
+  lock.waitLock(30000);
   try {
     const hSheet = getHoldingsSheet();
     const data = hSheet.getDataRange().getValues();
@@ -112,11 +128,19 @@ function holdingsSell(body) {
     for (let i = 1; i < data.length; i++) {
       if (data[i][idIdx] === body.id) {
         const holding = rowToObj(headers, data[i]);
+        // Strip apostrophe from symbol for output
+        if (holding.symbol && String(holding.symbol).startsWith("'")) {
+          holding.symbol = String(holding.symbol).slice(1);
+        }
+
         const sellShares = Number(body.shares);
-        const remaining = holding.shares - sellShares;
-        const pnl = (Number(body.sell_price) - holding.avg_cost) * sellShares;
-        const pnlPct = holding.avg_cost > 0
-          ? ((Number(body.sell_price) - holding.avg_cost) / holding.avg_cost) * 100
+        if (!sellShares || sellShares <= 0) throw new Error('sell shares must be > 0');
+        if (sellShares > Number(holding.shares)) throw new Error('sell shares exceeds holding');
+
+        const remaining = Number(holding.shares) - sellShares;
+        const pnl = (Number(body.sell_price) - Number(holding.avg_cost)) * sellShares;
+        const pnlPct = Number(holding.avg_cost) > 0
+          ? ((Number(body.sell_price) - Number(holding.avg_cost)) / Number(holding.avg_cost)) * 100
           : 0;
 
         // Append to RealizedPnL

@@ -7,17 +7,11 @@
 
 import { getConfig } from '../config.js';
 import { ttlGet, ttlSet } from '../lib/cache.js';
+import { isMarketOpen } from '../lib/market.js';
 
 const CACHE_TTL_MARKET = 60;    // seconds during market hours
 const CACHE_TTL_CLOSED = 3600;  // seconds when market closed
-
-function isMarketOpen() {
-  const now = new Date();
-  const twTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-  const h = twTime.getHours(), m = twTime.getMinutes(), day = twTime.getDay();
-  if (day === 0 || day === 6) return false;
-  return (h === 9 && m >= 0) || (h > 9 && h < 13) || (h === 13 && m <= 30);
-}
+const CACHE_TTL_FAILED = 300;   // seconds to suppress retries after a failed fetch
 
 function cacheTtl() {
   return isMarketOpen() ? CACHE_TTL_MARKET : CACHE_TTL_CLOSED;
@@ -46,25 +40,29 @@ async function doFetchYahooChart(ySymbol, range = '5d') {
 async function fetchYahoo(symbol) {
   const cacheKey = 'price_' + symbol;
   const cached = ttlGet(cacheKey);
-  if (cached) return cached;
+  // undefined = not in cache; null = cached failure; object = cached success
+  if (cached !== undefined) return cached;
 
   const suffixes = /\.(TW|TWO)$/i.test(symbol) ? [''] : ['.TW', '.TWO'];
-  
+
   for (const suffix of suffixes) {
     const meta = await doFetchYahooChart(symbol + suffix, '5d');
     if (meta) {
+      const prevClose = meta.previousClose || meta.chartPreviousClose || meta.regularMarketPrice;
       const result = {
         symbol,
         price: meta.regularMarketPrice,
-        prevClose: meta.previousClose || meta.chartPreviousClose,
-        change: meta.regularMarketPrice - (meta.previousClose || meta.chartPreviousClose),
-        changePct: ((meta.regularMarketPrice - (meta.previousClose || meta.chartPreviousClose)) /
-                    (meta.previousClose || meta.chartPreviousClose)) * 100
+        prevClose,
+        change: meta.regularMarketPrice - prevClose,
+        changePct: prevClose ? ((meta.regularMarketPrice - prevClose) / prevClose) * 100 : 0
       };
       ttlSet(cacheKey, result, cacheTtl());
       return result;
     }
   }
+
+  // Cache null so we don't hammer Yahoo on every render cycle
+  ttlSet(cacheKey, null, CACHE_TTL_FAILED);
   return null;
 }
 
@@ -129,10 +127,10 @@ export async function fetchPrices(symbols) {
 export async function lookupName(symbol) {
   const cacheKey = 'name_' + symbol;
   const cached = ttlGet(cacheKey);
-  if (cached) return cached;
+  if (cached !== undefined) return cached || '';
 
   const suffixes = /\.(TW|TWO)$/i.test(symbol) ? [''] : ['.TW', '.TWO'];
-  
+
   for (const suffix of suffixes) {
     const meta = await doFetchYahooChart(symbol + suffix, '1d');
     if (meta) {
@@ -143,5 +141,6 @@ export async function lookupName(symbol) {
       }
     }
   }
+  ttlSet(cacheKey, '', CACHE_TTL_FAILED);
   return '';
 }

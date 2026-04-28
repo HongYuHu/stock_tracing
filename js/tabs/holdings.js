@@ -40,8 +40,9 @@ async function renderHoldings(root, rows) {
   });
 
   // Summary stats
-  const totalCost = enriched.reduce((s, r) => s + (Number(r.avg_cost) * Number(r.shares)), 0);
-  const totalVal = enriched.reduce((s, r) => s + (r.marketVal ?? Number(r.avg_cost) * Number(r.shares)), 0);
+  const safeNum = v => { const n = Number(v); return isNaN(n) ? 0 : n; };
+  const totalCost = enriched.reduce((s, r) => s + (safeNum(r.avg_cost) * safeNum(r.shares)), 0);
+  const totalVal = enriched.reduce((s, r) => s + (r.marketVal ?? safeNum(r.avg_cost) * safeNum(r.shares)), 0);
   const totalPnl = totalVal - totalCost;
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
 
@@ -320,19 +321,17 @@ function bindAddForm(root, existingRows, enriched) {
     renderHoldings(root, existingRows);
     window.showToast('處理中...', 'info');
 
-    // 背景發送 API
-    // 為了防止 Google Sheets 自動將 "00935" 轉換成數字 935，我們在寫入時強制在前面加上單引號
-    const payload = { ...newObj, symbol: "'" + newObj.symbol };
-    
-    api.create(payload).then(async () => {
+    // 背景發送 API（GAS 端負責處理 symbol 前綴防止 Sheets 自動轉數字）
+    api.create(newObj).then(async () => {
       window.showToast('持股已新增', 'success');
-      // 背景重新同步真實 ID 不刷進 Loading 骨架
       try {
         const freshData = await api.list();
         existingRows.length = 0;
         existingRows.push(...freshData);
         renderHoldings(root, existingRows);
-      } catch(e) {}
+      } catch(e) {
+        window.showToast('資料已儲存，同步失敗請手動重整', 'warn');
+      }
     }).catch(e => {
       window.showToast('新增失敗：' + e.message, 'error');
       // 發生錯誤，回滾本地更新

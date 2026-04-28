@@ -9,7 +9,8 @@ function getAISheet() {
 
 const AI_HEADERS = ['date', 'symbol', 'model', 'summary_md', 'sentiment', 'target_price', 'created_at'];
 
-function aiGet(date, symbol) {
+function aiGet(date, symbol, limit) {
+  const maxRows = Number(limit) > 0 ? Number(limit) : 200;
   const sheet = getAISheet();
   const data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
@@ -18,11 +19,12 @@ function aiGet(date, symbol) {
     .map(row => rowToObj(headers, row))
     .filter(r => {
       if (!r.date) return false;
-      if (date && r.date !== date) return false;
+      if (date && String(r.date).slice(0, 10) !== String(date).slice(0, 10)) return false;
       if (symbol && String(r.symbol).toUpperCase() !== symbol.toUpperCase()) return false;
       return true;
     })
-    .sort((a, b) => (b.date > a.date ? 1 : -1));
+    .sort((a, b) => (String(b.date) > String(a.date) ? 1 : -1))
+    .slice(0, maxRows);
 }
 
 function aiSave(body) {

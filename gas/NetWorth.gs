@@ -27,9 +27,11 @@ function networthList(from, to) {
   return data.slice(1)
     .map(row => rowToObj(headers, row))
     .filter(r => {
-      if (from && r.date < from) return false;
-      if (to && r.date > to) return false;
-      return true;
+      // Force YYYY-MM-DD string comparison to handle both string and Date cell types
+      const d = String(r.date instanceof Date ? r.date.toISOString().split('T')[0] : r.date || '').slice(0, 10);
+      if (from && d < String(from).slice(0, 10)) return false;
+      if (to && d > String(to).slice(0, 10)) return false;
+      return d.length > 0;
     });
 }
 

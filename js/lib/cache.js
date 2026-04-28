@@ -11,18 +11,19 @@ export function ttlSet(key, value, ttlSeconds) {
   } catch (_) {}
 }
 
+// Returns undefined when key not in cache (vs null which is a valid cached value)
 export function ttlGet(key) {
   try {
     const raw = localStorage.getItem('cache_' + key);
-    if (!raw) return null;
+    if (!raw) return undefined;
     const { v, exp } = JSON.parse(raw);
     if (Date.now() > exp) {
       localStorage.removeItem('cache_' + key);
-      return null;
+      return undefined;
     }
     return v;
   } catch (_) {
-    return null;
+    return undefined;
   }
 }
 

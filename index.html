@@ -172,6 +172,7 @@
   import { initPerformance } from './js/tabs/performance.js';
   import { initAI } from './js/tabs/ai.js';
   import { loadConfig, saveConfig, getConfig } from './js/config.js';
+  import { isMarketOpen, getTWTime } from './js/lib/market.js';
 
   // ── Mobile sidebar ────────────────────────────────────────────────
   window.toggleSidebar = function() {
@@ -256,15 +257,12 @@
 
   // ── Market status badge ───────────────────────────────────────────
   function updateMarketStatus() {
-    const now = new Date();
-    // Taiwan timezone offset is UTC+8
-    const twTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-    const h = twTime.getHours(), m = twTime.getMinutes();
-    const day = twTime.getDay();
+    const tw = getTWTime();
+    const h = tw.getHours(), day = tw.getDay();
     const el = document.getElementById('market-status');
     if (day === 0 || day === 6) {
       el.textContent = '休市'; el.className = 'market-badge closed';
-    } else if ((h === 9 && m >= 0) || (h > 9 && h < 13) || (h === 13 && m <= 30)) {
+    } else if (isMarketOpen()) {
       el.textContent = '交易中'; el.className = 'market-badge open';
     } else {
       el.textContent = '收盤'; el.className = 'market-badge closed';

@@ -166,11 +166,12 @@ async function runManualGeneration(root, apiKey) {
 
     const priceMap = await fetchPrices(active.map(h => h.symbol));
     const todayStr = new Date().toISOString().split('T')[0];
+    const failures = [];
 
     for (let i = 0; i < active.length; i++) {
       const h = active[i];
       btn.textContent = `⏳ 正在分析 ${h.symbol} (${i+1}/${active.length})...`;
-      
+
       const p = priceMap.get(h.symbol);
       const px = p ? p.price : '未知';
       const cost = h.avg_cost || 0;
@@ -185,26 +186,25 @@ async function runManualGeneration(root, apiKey) {
         const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts:[{text: prompt}] }] })
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         });
-        
+
         if (!res.ok) {
-           const err = await res.json();
-           if (err.error?.status === 'PERMISSION_DENIED' || err.error?.code === 400) {
-             alert('Gemini API Key 無效，請檢查或重新設定！');
-             localStorage.removeItem('gemini_api_key');
-             break;
-           }
-           console.error('Gemini error:', err);
-           continue;
+          const err = await res.json().catch(() => ({}));
+          if (err.error?.status === 'PERMISSION_DENIED' || err.error?.code === 403) {
+            localStorage.removeItem('gemini_api_key');
+            throw new Error('Gemini API Key 無效，請至設定重新填入');
+          }
+          failures.push(`${h.symbol}(HTTP ${res.status})`);
+          continue;
         }
 
         const data = await res.json();
         let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        text = text.replace(/^```json/g, '').replace(/```$/g, '').trim();
+        text = text.replace(/^```json\s*/g, '').replace(/\s*```$/g, '').trim();
 
-        let parsed = { sentiment: 'neutral', target_price: '', summary_md: '未能解析分析結果' };
-        try { parsed = JSON.parse(text); } catch (e) { console.error('JSON parse fail', text); parsed.summary_md = text; }
+        let parsed = { sentiment: 'neutral', target_price: '', summary_md: text || '未能解析分析結果' };
+        try { parsed = JSON.parse(text); } catch (_) { parsed.summary_md = text; }
 
         await aiApi.save({
           date: todayStr,
@@ -215,10 +215,15 @@ async function runManualGeneration(root, apiKey) {
           summary_md: parsed.summary_md
         });
       } catch (err) {
-        console.error('Failed to parse AI or save', err);
+        if (err.message.includes('API Key')) throw err; // re-throw key errors to outer catch
+        failures.push(`${h.symbol}(${err.message})`);
+        console.error(`AI generation failed for ${h.symbol}:`, err);
       }
     }
 
+    if (failures.length) {
+      window.showToast(`⚠️ ${failures.length} 檔分析失敗：${failures.join(', ')}`, 'warn');
+    }
     btn.textContent = '✅ 分析完畢，正在重載...';
     await initAI(root); // completely reload AI tab
   } catch (err) {
