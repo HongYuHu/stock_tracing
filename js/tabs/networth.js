@@ -6,8 +6,10 @@ import { networth as nwApi, assets as assetsApi, holdings as hApi } from '../api
 import { fetchPrices } from '../api/prices.js';
 import { fmtTwd, fmtDate, colorClass, escapeHtml } from '../lib/format.js';
 import { isConfigured, canWrite } from '../config.js';
+import { isMarketOpen } from '../lib/market.js';
 
 export async function initNetWorth(root) {
+  if (root._priceTimer) { clearInterval(root._priceTimer); root._priceTimer = null; }
   root.innerHTML = `<div class="loading"><div class="spinner"></div> 載入資產中…</div>`;
   if (!isConfigured()) {
     root.innerHTML = `<p class="muted" style="padding:2rem">請先設定 GAS URL。</p>`;
@@ -81,25 +83,31 @@ function renderNetWorth(root, history, assetsData, holdingsData) {
   }
 
   // 非同步抓取最新報價，更動畫面
-  fetchPrices(symbols).then(priceMap => {
-    let realStockVal = 0;
-    activeHoldings.forEach(h => {
-      const p = priceMap.get(h.symbol);
-      const px = p ? p.price : (h.avg_cost || 0);
-      realStockVal += px * (h.shares || 0);
+  function refreshLiveValues() {
+    return fetchPrices(symbols).then(priceMap => {
+      let realStockVal = 0;
+      activeHoldings.forEach(h => {
+        const p = priceMap.get(h.symbol);
+        const px = p ? p.price : (h.avg_cost || 0);
+        realStockVal += px * (h.shares || 0);
+      });
+      const liveNetWorth = totalAssets + realStockVal - totalLiab;
+      const nwEl = root.querySelector('#dynamic-net-worth');
+      const svEl = root.querySelector('#dynamic-stock-value');
+      if (nwEl) nwEl.textContent = fmtTwd(liveNetWorth);
+      if (svEl) svEl.textContent = fmtTwd(realStockVal);
+      root.dataset.liveStockValue = realStockVal;
+      root.dataset.totalCash = totalCash;
+      root.dataset.otherAssets = totalAssets - totalCash;
+      root.dataset.totalLiab = totalLiab;
     });
-    const liveNetWorth = totalAssets + realStockVal - totalLiab;
-    const nwEl = root.querySelector('#dynamic-net-worth');
-    const svEl = root.querySelector('#dynamic-stock-value');
-    if (nwEl) nwEl.textContent = fmtTwd(liveNetWorth);
-    if (svEl) svEl.textContent = fmtTwd(realStockVal);
+  }
 
-    // Update snapshot defaults invisibly
-    root.dataset.liveStockValue = realStockVal;
-    root.dataset.totalCash = totalCash;
-    root.dataset.otherAssets = totalAssets - totalCash;
-    root.dataset.totalLiab = totalLiab;
-  });
+  refreshLiveValues();
+
+  if (root._priceTimer) clearInterval(root._priceTimer);
+  const REFRESH_MS = isMarketOpen() ? 60_000 : 300_000;
+  root._priceTimer = setInterval(refreshLiveValues, REFRESH_MS);
 }
 
 function renderSnapshotForm() {

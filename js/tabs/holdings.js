@@ -6,8 +6,10 @@ import { holdings as api } from '../api/sheets.js';
 import { fetchPrices, lookupName } from '../api/prices.js';
 import { fmtTwd, fmtNum, fmtPct, fmtDate, colorClass, escapeHtml } from '../lib/format.js';
 import { isConfigured, canWrite } from '../config.js';
+import { isMarketOpen } from '../lib/market.js';
 
 export async function initHoldings(root) {
+  if (root._priceTimer) { clearInterval(root._priceTimer); root._priceTimer = null; }
   root.innerHTML = renderSkeleton();
   if (!isConfigured()) {
     root.innerHTML = `<p class="muted" style="padding:2rem">請先在 設定 中填入 GAS URL 和 Read Token。</p>`;
@@ -57,6 +59,61 @@ async function renderHoldings(root, rows) {
   bindAddForm(root, rows, enriched);
   bindTableActions(root, enriched);
   updateSidebarPortfolio(totalVal, totalPnl, totalPnlPct);
+
+  // Store rows for in-place price refresh
+  root._holdingRows = rows;
+  if (root._priceTimer) clearInterval(root._priceTimer);
+  const REFRESH_MS = isMarketOpen() ? 60_000 : 300_000;
+  root._priceTimer = setInterval(() => refreshPrices(root), REFRESH_MS);
+}
+
+async function refreshPrices(root) {
+  const rows = root._holdingRows;
+  if (!rows || !rows.length) return;
+  if (root.querySelector('dialog[open]')) return; // skip while modal is open
+
+  const safeNum = v => { const n = Number(v); return isNaN(n) ? 0 : n; };
+  const priceMap = await fetchPrices(rows.map(r => r.symbol));
+
+  let totalVal = 0, totalCost = 0;
+  rows.forEach(r => {
+    const p = priceMap.get(r.symbol);
+    const cost = safeNum(r.avg_cost), shares = safeNum(r.shares);
+    const price = p?.price ?? null;
+    const pnl = price != null ? (price - cost) * shares : null;
+    const pnlPct = (price != null && cost > 0) ? ((price - cost) / cost) * 100 : null;
+    const marketVal = price != null ? price * shares : null;
+    totalCost += cost * shares;
+    totalVal += marketVal ?? cost * shares;
+
+    const tr = root.querySelector(`tr[data-id="${r.id}"]`);
+    if (!tr) return;
+    const cells = tr.querySelectorAll('td');
+    const changeArrow = p?.changePct != null
+      ? `<br><small class="${colorClass(p.changePct)}">${p.changePct >= 0 ? '▲' : '▼'} ${Math.abs(p.changePct).toFixed(2)}%</small>`
+      : '';
+    cells[3].innerHTML = price != null ? `${fmtTwd(price)}${changeArrow}` : '—';
+    cells[4].textContent = marketVal != null ? fmtTwd(marketVal) : '—';
+    cells[5].textContent = pnl != null ? fmtTwd(pnl) : '—';
+    cells[5].className = `right ${colorClass(pnl)}`;
+    cells[6].textContent = pnlPct != null ? fmtPct(pnlPct) : '—';
+    cells[6].className = `right ${colorClass(pnlPct)}`;
+    tr.className = pnl != null ? (pnl > 0 ? 'row-gain' : pnl < 0 ? 'row-loss' : '') : '';
+  });
+
+  const totalPnl = totalVal - totalCost;
+  const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
+  updateSidebarPortfolio(totalVal, totalPnl, totalPnlPct);
+
+  // Update stats cards (non-destructive, just text)
+  const valEl = root.querySelector('.stat-card.total-asset-card .asset-value');
+  const pnlEl = root.querySelector('.stat-card .pnl-value');
+  if (valEl) valEl.textContent = fmtTwd(totalVal);
+  if (pnlEl) {
+    const sign = totalPnl >= 0 ? '+' : '';
+    pnlEl.innerHTML = `${sign}${fmtTwd(totalPnl)} <span class="pnl-pct">(${sign}${fmtPct(totalPnlPct)})</span>`;
+    pnlEl.className = `pnl-value ${totalPnl >= 0 ? 'gain' : 'loss'}`;
+  }
 }
 
 // ── Stats row ─────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
  * Strategy: network-first for index.html, cache-first for assets.
  */
 
-const CACHE_VERSION = 'stock-tracker-v13';
+const CACHE_VERSION = 'stock-tracker-v14';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ const ASSETS_TO_CACHE = [
   './js/lib/cache.js',
   './js/lib/format.js',
   './js/lib/alerts.js',
+  './js/lib/market.js',
   './js/tabs/holdings.js',
   './js/tabs/networth.js',
   './js/tabs/performance.js',
